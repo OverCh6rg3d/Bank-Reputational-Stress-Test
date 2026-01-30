@@ -1,0 +1,81 @@
+# Project: Reputational Stress-Test Simulator
+## "Proactive Resilience via Synthetic Social Modeling"
+
+### 1. Executive Summary
+The **Reputational Stress-Test Simulator** is a specialized AI Decision Support System designed for the **Mashreq Bank "AI for Social Signal Intelligence" Challenge**. Unlike traditional social listening tools that merely *report* on current metrics, this system *predicts* the future trajectory of reputational risks.
+
+It achieves this by combining **Explainable AI** for signal interpretation with **Agent-Based Modeling (ABM)** to simulate the "Velocity of Contagion"—predicting how a specific rumor, fraud claim, or service complaint would propagate through synthetic customer segments if left unaddressed.
+
+**Value Proposition:** "Don't just listen to the noise. Simulate the storm before it hits."
+
+---
+
+### 2. Alignment with Challenge Requirements
+This project strictly adheres to the "No Scraping / No Live Data" constraint by operating entirely within a controlled, synthetic environment.
+
+| Constraint / Requirement | Implementation |
+| :--- | :--- |
+| **No Live Data** | Uses a **Synthetic Signal Generator** to create diverse, realistic social artifacts (posts, reviews, articles) based on distinct archetypes. |
+| **Responsible AI** | **Human-in-the-Loop** workflows for all response approvals; **Non-Action Boundaries** (system never posts); **Uncertainty Quantification**. |
+| **Scenarios Covered** | 1. **Brand Sentiment Shift** (Simulating impact on trust) <br> 2. **Fraud/Scam Rumors** (Detecting "smoldering" risks) <br> 3. **Executive Insight Briefing** (Automated C-Level reporting) |
+
+---
+
+### 3. Core Functionality & Architecture
+
+#### Module A: The Signal Injection Layer (Synthetic Data)
+*   **Purpose:** Generates realistic, noisy input data to test the system.
+*   **Mechanism:** An LLM-based generator creates "Social Artifacts" tagged with hidden ground-truth metadata (e.g., origin, severity, truthfulness).
+*   **Artifact Types:**
+    *   *Viral Tweets/X-posts* (Short, high emotion).
+    *   *Reddit-style Threads* (Detailed, technical discussion of "issues").
+    *   *News Headlines* (Formal, high authority).
+
+#### Module B: The Interpretation Engine (The "Brain")
+*   **Signal Detection:** Filters noise from signal. Identifies clusters of related content.
+*   **Explainable Classification:** Categorizes events into **Operational Risk**, **Repusional Risk**, or **Market Noise**.
+    *   *Output:* "This cluster relates to a potential 'OTP Bypass' rumor. Severity: High. Reason: Technical specificity of claims."
+
+#### Module C: The "What-If" Contagion Simulator (The "Differentiator")
+*   **Concept:** This is the project's "Killer Feature". It answers: *"If we do nothing for 4 hours, how bad does this get?"*
+*   **Methodology:**
+    1.  Spawns a small population of **Synthetic Customer Agents** (Grumpy Gen-Z, Loyal Boomers, Tech-Savvy Millennials).
+    2.  Injects the interpreted signal into their feed.
+    3.  Runs a multi-step simulation to see if they share, ignore, or escalate the content.
+*   **Metric:** **Velocity of Contagion (VoC)**. A score (0-100) indicating the virality potential of the risk.
+
+#### Module D: Executive Insight & Governance
+*   **Briefing Generator:** Compiles the Signal + Expected Impact + Recommended Strategy into a concise 1-page PDF/Dashboard view for leadership.
+*   **Uncertainty Transparency:** Every prediction includes a `Confidence Score` (e.g., "85% confidence this is a coordinated bot attack") and `Data Gaps` ("Missing verifying technical data").
+
+---
+
+### 4. Detailed User Flow (The Demo Narrative)
+
+1.  **Injection**: The Admin selects a scenario: *"Emerging Rumor of Data Leak"*.
+2.  **Detection**: The system flags a spike in synthetic "Reddit" activity.
+3.  **Analysis**:
+    *   **AI Interpretation**: "Content suggests a 3rd party vendor leak, not internal. High panic potential."
+    *   **Simulation Run**: The dashboard shows a graph extending 24 hours into the future.
+    *   *Prediction*: "Without intervention, negative sentiment crosses critical threshold in 6 hours."
+4.  **Recommendation**: The system proposes a **Response Strategy**: "Issue proactive clarification on vendor security standards."
+5.  **Governance**: The Human Risk Officer reviews the data validity, the confidence score, and approves the drafting of a statement (for internal review only).
+6.  **Reporting**: An "Executive Briefing" is generated instantly.
+
+---
+
+### 5. Responsible AI Guardrails
+*   **The "Air Gap"**: The system has **zero** write access to public social media APIs. It cannot post, like, or reply.
+*   **Hallucination Check**: A secondary adversarial LLM "Critics" the predictions of the primary simulator to identify logic gaps before presenting to the human.
+*   **Bias Check**: The synthetic population is explicitly designed to be diverse to ensure the "Contagion" simulation doesn't ignore specific demographics.
+
+### 6. Technical Stack Proposal
+*   **Frontend**: Next.js or Streamlit (for rapid dashboard prototyping).
+*   **Orchestration**: LangGraph (perfect for the cyclical simulation of agents) or Autogen.
+*   **LLM Backend**: Gemini 1.5 Pro (long context for analyzing history) or similar.
+*   **Data Store**: Vector DB (Chroma/Pinecone) for storing and retrieving past simulations (Case-Based Reasoning).
+
+---
+
+### 7. Why This Wins
+While other teams will build "Dashboards that show sentiment," this project builds a "Flight Simulator for Crisis Management." It moves beyond **descriptive analytics** (what happened) to **prescriptive and predictive analytics** (what will happen and what to do), which is exactly the sophisticated "Tier 1" banking requirement Mashreq is looking for.
