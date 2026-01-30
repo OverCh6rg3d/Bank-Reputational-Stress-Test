@@ -93,7 +93,7 @@ We adhere to a strict **"Human-in-the-Loop" (HITL)** philosophy.
 
 1. **Clone the Repo**
 ```bash
-git clone [https://github.com/yourusername/Bank-Reputational-Stress-Test.git](https://github.com/yourusername/Bank-Reputational-Stress-Test.git)
+git clone [https://github.com/OverCh6rg3d/Bank-Reputational-Stress-Test.git](https://github.com/OverCh6rg3d/Bank-Reputational-Stress-Test.git)
 
 ```
 
