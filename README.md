@@ -17,18 +17,18 @@
 
 ## Key Features
 
-### 1. The Causal Attribution Engine 🧠
+### 1. The Causal Attribution Engine
 Distinguishes between harmless noise and systemic threats using multi-agent reasoning.
 * **Input:** Abstracted Social Signals (e.g., "Login Failure" rumor).
 * **Process:** Evaluates signal against historical fraud patterns vs. technical outage logs.
 * **Output:** Root Cause Probability Distribution (e.g., *80% Tech Issue, 20% Coordinated Attack*).
 
-### 2. "Contagion Velocity" Simulator 📊
+### 2. "Contagion Velocity" Simulator
 A Monte Carlo simulation engine that forecasts the spread of misinformation across customer demographics.
 * **Metric:** Calculates **Time-to-Criticality** (time until a signal reaches Tier-1 media).
 * **Scenario Testing:** Allows leadership to simulate "What-If" responses (e.g., Silence vs. Transparency) to see which flattens the risk curve.
 
-### 3. The Constitutional Guardrail Layer 🛡️
+### 3. The Constitutional Guardrail Layer
 * **Socratic Review:** The AI must answer 3 verification questions about its confidence level before a briefing is generated.
 * **Zero-Action Protocol:** The system allows **zero** automated posting or public interaction.
 * **Audit Trace:** Every inference step is logged for regulatory compliance.
