@@ -1,243 +1,306 @@
-import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
+import React from 'react';
+import { SimulationProvider, useSimulation } from '../context/SimulationContext';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Activity, Users, TrendingUp, AlertTriangle, ShieldCheck, CheckCircle, XCircle, BrainCircuit, ChevronRight, FileText, Download } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { Activity, BrainCircuit, AlertTriangle, ShieldCheck, CheckCircle, Play, Pause, RotateCcw, Clock } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
-const data = [
-    { time: '10:00', velocity: 12 },
-    { time: '10:30', velocity: 19 },
-    { time: '11:00', velocity: 35 },
-    { time: '11:30', velocity: 68 },
-    { time: '12:00', velocity: 84 },
-    { time: '12:30', velocity: 92 },
-    { time: '13:00', velocity: 88 },
-];
+// --- HEADER COMPONENT ---
+function SimulationHeader() {
+    const {
+        activeScenario,
+        setActiveScenario,
+        runSimulation,
+        pauseSimulation,
+        stopSimulation,
+        simulationStatus,
+        simulationSpeed,
+        setSimulationSpeed,
+        timeHorizon
+    } = useSimulation();
 
-const demographicsData = [
-    { name: 'Gen-Z', value: 35 },
-    { name: 'Millennials', value: 40 },
-    { name: 'Boomers', value: 15 },
-    { name: 'Corporates', value: 10 },
-];
-const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042'];
-
-export default function Dashboard() {
-    const [activeScenario, setActiveScenario] = useState("Data Leak Rumor");
+    const speedOptions = [0.5, 1, 2, 4];
+    const isActive = simulationStatus === 'running' || simulationStatus === 'paused';
 
     return (
-        <div className="space-y-6">
-            {/* 1. Scenario Selection & Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Simulation Dashboard</h1>
-                    <p className="text-muted-foreground mt-1">Live monitoring of reputational risk vectors.</p>
-                </div>
-                <div className="flex items-center gap-2 bg-card/50 p-2 rounded-lg border border-border/50 backdrop-blur">
-                    <span className="text-sm font-medium text-muted-foreground px-2">Scenario:</span>
-                    <select
-                        className="bg-transparent text-sm font-medium focus:outline-none cursor-pointer"
-                        value={activeScenario}
-                        onChange={(e) => setActiveScenario(e.target.value)}
-                    >
-                        <option>Data Leak Rumor</option>
-                        <option>Service Outage</option>
-                        <option>Executive Misconduct (Deepfake)</option>
-                    </select>
-                    <Button size="sm" variant="outline" className="ml-2 h-8 hidden lg:flex">
-                        <Download className="mr-2 h-3.5 w-3.5" />
-                        Export Briefing
-                    </Button>
-                    <Button size="sm" className="ml-2 h-8">
-                        <Activity className="mr-2 h-3.5 w-3.5" />
-                        Run Simulation
-                    </Button>
-                </div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">Crisis Simulator</h1>
+                <p className="text-muted-foreground mt-1">Predict the storm before it hits.</p>
             </div>
-
-            {/* 2. Key Metrics including Confidence */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card className="bg-card/50 backdrop-blur">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Contagion Velocity</CardTitle>
-                        <Activity className="h-4 w-4 text-destructive" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-destructive">84.2 / 100</div>
-                        <p className="text-xs text-muted-foreground">+12% from last hour</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-card/50 backdrop-blur">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Model Confidence</CardTitle>
-                        <BrainCircuit className="h-4 w-4 text-purple-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-purple-500">85%</div>
-                        <div className="flex items-center mt-1 space-x-1">
-                            <ShieldCheck className="h-3 w-3 text-green-500" />
-                            <p className="text-xs text-muted-foreground">Adversarial Validated</p>
+            <div className="flex items-center gap-3 flex-wrap">
+                {/* Time & Speed Controls (visible when running or paused) */}
+                {isActive && (
+                    <>
+                        <div className={`flex items-center gap-2 text-sm ${simulationStatus === 'running' ? 'text-amber-400 animate-pulse' : 'text-muted-foreground'}`}>
+                            <Clock className="h-4 w-4" />
+                            <span className="font-mono">T+{timeHorizon}h</span>
+                            {simulationStatus === 'paused' && (
+                                <span className="text-xs bg-muted px-2 py-0.5 rounded">PAUSED</span>
+                            )}
                         </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-card/50 backdrop-blur">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Projected Impact</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-amber-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-amber-500">High</div>
-                        <p className="text-xs text-muted-foreground">Sentiment Shift &gt; 15%</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-card/50 backdrop-blur">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Critical Alerts</CardTitle>
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">3</div>
-                        <p className="text-xs text-muted-foreground">Requires attention</p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                {/* Main Chart */}
-                <Card className="col-span-4 bg-card/50 backdrop-blur">
-                    <CardHeader>
-                        <CardTitle>Risk Velocity Over Time</CardTitle>
-                        <CardDescription>
-                            Predictive modeling of rumor spread over the next 4 hours.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pl-2">
-                        <div className="h-[300px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart
-                                    data={data}
-                                    margin={{
-                                        top: 10,
-                                        right: 30,
-                                        left: 0,
-                                        bottom: 0,
-                                    }}
+                        {/* Speed Controls */}
+                        <div className="flex items-center gap-1 bg-muted/50 rounded-md p-1">
+                            <span className="text-xs text-muted-foreground px-1">Speed:</span>
+                            {speedOptions.map(speed => (
+                                <button
+                                    key={speed}
+                                    onClick={() => setSimulationSpeed(speed)}
+                                    className={`px-2 py-1 text-xs rounded transition-colors ${simulationSpeed === speed
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'hover:bg-muted text-muted-foreground'
+                                        }`}
                                 >
-                                    <defs>
-                                        <linearGradient id="colorVelocity" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.8} />
-                                            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-                                    <XAxis dataKey="time" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
-                                    <Tooltip
-                                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                                        itemStyle={{ color: 'hsl(var(--foreground))' }}
-                                    />
-                                    <Area type="monotone" dataKey="velocity" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorVelocity)" />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                                    {speed}x
+                                </button>
+                            ))}
                         </div>
-                    </CardContent>
-                </Card>
+                    </>
+                )}
 
-                {/* Demographics Chart (New) */}
-                <Card className="col-span-3 lg:col-span-3 bg-card/50 backdrop-blur">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-medium">Agent Demographics</CardTitle>
-                        <CardDescription>Simulated population breakdown</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="h-[200px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={demographicsData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={60}
-                                        outerRadius={80}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {demographicsData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip
-                                        contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                                        itemStyle={{ color: 'hsl(var(--foreground))' }}
-                                    />
-                                    <Legend
-                                        layout="vertical"
-                                        verticalAlign="middle"
-                                        align="right"
-                                        iconSize={8}
-                                        wrapperStyle={{ fontSize: '10px' }}
-                                    />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </CardContent>
-                </Card>
+                {/* Scenario Selector */}
+                <select
+                    className="bg-card border border-border rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                    value={activeScenario}
+                    onChange={(e) => setActiveScenario(e.target.value)}
+                    disabled={isActive}
+                >
+                    <option>Data Leak Rumor</option>
+                    <option>Service Outage</option>
+                    <option>Executive Misconduct (Deepfake)</option>
+                </select>
 
-                {/* 3. Governance & Strategy Panel */}
-                <div className="col-span-3 lg:col-span-4 space-y-4">
-                    <Card className="bg-card/50 backdrop-blur border-l-4 border-l-amber-500">
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg">Response Strategy</CardTitle>
-                                <ShieldCheck className="h-5 w-5 text-amber-500" />
-                            </div>
-                            <CardDescription>AI Recommendation (Confidence: High)</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm font-medium">Issue proactive clarification on vendor security standards.</p>
-                            <p className="text-xs text-muted-foreground mt-2">Reasoning: Signal cluster indicates specific technical fears regarding 3rd party API.</p>
-                        </CardContent>
-                        <CardFooter className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10">Reject</Button>
-                            <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white">
-                                <CheckCircle className="mr-2 h-4 w-4" /> Approve
-                            </Button>
-                        </CardFooter>
-                    </Card>
-                </div>
-
-                <div className="col-span-3 lg:col-span-3">
-                    <Card className="bg-card/50 backdrop-blur h-full">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">Recent Detected Signals</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-4">
-                                {[
-                                    { source: 'Twitter/X', text: '@MashreqBot Is the app down? Cannot login...', sentiment: 'Negative', time: '2m ago' },
-                                    { source: 'Reddit', text: 'Rumors of a data breach on r/CyberSecurity...', sentiment: 'Neutral', time: '5m ago' },
-                                    { source: 'News', text: 'Central Bank announces new regulations...', sentiment: 'Positive', time: '12m ago' },
-                                ].map((item, i) => (
-                                    <div key={i} className="flex items-start space-x-4 border-b border-border/40 pb-3 last:border-0 last:pb-0">
-                                        <div className="space-y-1 w-full">
-                                            <div className="flex justify-between">
-                                                <p className="text-xs font-semibold text-primary">{item.source}</p>
-                                                <span className="text-[10px] text-muted-foreground">{item.time}</span>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground line-clamp-2">
-                                                {item.text}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                {/* Control Buttons */}
+                {simulationStatus === 'idle' && (
+                    <Button onClick={runSimulation}>
+                        <Play className="mr-2 h-4 w-4 fill-current" /> Run Simulation
+                    </Button>
+                )}
+                {simulationStatus === 'running' && (
+                    <>
+                        <Button onClick={pauseSimulation} variant="secondary">
+                            <Pause className="mr-2 h-4 w-4 fill-current" /> Pause
+                        </Button>
+                        <Button onClick={stopSimulation} variant="outline" size="icon" title="Reset">
+                            <RotateCcw className="h-4 w-4" />
+                        </Button>
+                    </>
+                )}
+                {simulationStatus === 'paused' && (
+                    <>
+                        <Button onClick={runSimulation}>
+                            <Play className="mr-2 h-4 w-4 fill-current" /> Resume
+                        </Button>
+                        <Button onClick={stopSimulation} variant="outline" size="icon" title="Reset">
+                            <RotateCcw className="h-4 w-4" />
+                        </Button>
+                    </>
+                )}
             </div>
         </div>
+    );
+}
+
+// --- METRICS ROW (Simplified to 3) ---
+function KeyMetrics() {
+    const { metrics, simulationStatus } = useSimulation();
+    const { velocity, confidence, alerts } = metrics;
+
+    return (
+        <div className="grid gap-4 md:grid-cols-3">
+            <Card className={`bg-card/50 backdrop-blur ${velocity > 80 ? 'border-destructive' : ''}`}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Velocity of Contagion</CardTitle>
+                    <Activity className={`h-4 w-4 ${velocity > 50 ? 'text-destructive' : 'text-muted-foreground'}`} />
+                </CardHeader>
+                <CardContent>
+                    <div className={`text-3xl font-bold tabular-nums ${velocity > 80 ? 'text-destructive' : velocity > 50 ? 'text-amber-500' : ''}`}>
+                        {velocity.toFixed(0)}
+                        <span className="text-lg text-muted-foreground">/100</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        {velocity > 80 ? '⚠️ Critical threshold breached' : velocity > 50 ? 'Elevated risk' : 'Within normal range'}
+                    </p>
+                </CardContent>
+            </Card>
+
+            <Card className="bg-card/50 backdrop-blur">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Model Confidence</CardTitle>
+                    <BrainCircuit className="h-4 w-4 text-purple-500" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-3xl font-bold text-purple-400 tabular-nums">{confidence}%</div>
+                    <div className="flex items-center mt-1 gap-1">
+                        <ShieldCheck className="h-3 w-3 text-green-500" />
+                        <p className="text-xs text-muted-foreground">Adversarial Validated</p>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className={`bg-card/50 backdrop-blur ${alerts > 0 ? 'border-amber-500/50' : ''}`}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Critical Alerts</CardTitle>
+                    <AlertTriangle className={`h-4 w-4 ${alerts > 0 ? 'text-amber-500 animate-pulse' : 'text-muted-foreground'}`} />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-3xl font-bold tabular-nums">{alerts}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        {alerts > 0 ? 'Immediate action required' : 'No pending alerts'}
+                    </p>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+// --- MAIN CHART (The Core Visual) ---
+function VelocityChart() {
+    const { velocityHistory, simulationStatus, metrics } = useSimulation();
+
+    return (
+        <Card className="bg-card/50 backdrop-blur">
+            <CardHeader>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <CardTitle>Risk Trajectory</CardTitle>
+                        <CardDescription>
+                            {simulationStatus === 'running'
+                                ? 'Simulating rumor spread in real-time...'
+                                : 'Click "Run Simulation" to see the predicted impact.'}
+                        </CardDescription>
+                    </div>
+                    {metrics.velocity > 80 && (
+                        <span className="text-xs bg-destructive/20 text-destructive px-2 py-1 rounded-full">
+                            Threshold Breached
+                        </span>
+                    )}
+                </div>
+            </CardHeader>
+            <CardContent>
+                <div className="h-[280px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={velocityHistory} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="colorVelocity" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
+                                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                            <XAxis dataKey="time" stroke="#888888" fontSize={11} tickLine={false} axisLine={false} />
+                            <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} domain={[0, 100]} />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                                labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
+                            />
+                            <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="5 5" label={{ value: "Critical", fill: '#ef4444', fontSize: 10, position: 'right' }} />
+                            <Area type="monotone" dataKey="velocity" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorVelocity)" animationDuration={300} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// --- DECISION PANEL (AI Insight + Governance Combined) ---
+function DecisionPanel() {
+    const { activeScenario, simulationStatus, metrics } = useSimulation();
+    const [status, setStatus] = React.useState("pending");
+
+    // Reset status when scenario changes or simulation restarts
+    React.useEffect(() => {
+        setStatus("pending");
+    }, [activeScenario, simulationStatus]);
+
+    const getRecommendation = () => {
+        if (activeScenario.includes("Data Leak")) {
+            return {
+                action: "Issue proactive clarification on vendor security standards.",
+                reasoning: "Signal cluster indicates technical fears regarding 3rd party API access."
+            };
+        } else if (activeScenario.includes("Outage")) {
+            return {
+                action: "Post real-time status updates on official channels.",
+                reasoning: "High volume of 'app down' mentions detected. Transparency reduces panic."
+            };
+        } else {
+            return {
+                action: "Prepare legal statement denying video authenticity.",
+                reasoning: "Deepfake indicators detected. Swift denial critical for stock stability."
+            };
+        }
+    };
+
+    const rec = getRecommendation();
+
+    return (
+        <Card className={`bg-card/50 backdrop-blur border-l-4 ${status === 'approved' ? 'border-l-green-500' :
+            status === 'rejected' ? 'border-l-destructive' : 'border-l-purple-500'
+            }`}>
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">AI Recommendation</CardTitle>
+                    <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">
+                        {metrics.confidence}% confidence
+                    </span>
+                </div>
+                <CardDescription>Human-in-the-Loop Governance</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="p-3 bg-muted/30 rounded-md border border-border/50">
+                    <p className="text-sm font-medium">{rec.action}</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                        <strong>Reasoning:</strong> {rec.reasoning}
+                    </p>
+                </div>
+
+                {status === 'approved' && (
+                    <div className="p-3 bg-green-500/10 rounded border border-green-500/30 text-sm text-green-400 flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4" /> Strategy approved. Ready for execution.
+                    </div>
+                )}
+                {status === 'rejected' && (
+                    <div className="p-3 bg-destructive/10 rounded border border-destructive/30 text-sm text-destructive">
+                        Strategy rejected. Awaiting alternative approach.
+                    </div>
+                )}
+            </CardContent>
+            {status === 'pending' && (
+                <CardFooter className="flex gap-2 justify-end border-t border-border/30 pt-4">
+                    <Button
+                        variant="outline"
+                        onClick={() => setStatus('rejected')}
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                        Reject
+                    </Button>
+                    <Button onClick={() => setStatus('approved')}>
+                        <CheckCircle className="mr-2 h-4 w-4" /> Approve Strategy
+                    </Button>
+                </CardFooter>
+            )}
+        </Card>
+    );
+}
+
+// --- MAIN DASHBOARD ---
+export default function Dashboard() {
+    return (
+        <SimulationProvider>
+            <div className="space-y-6 pb-8">
+                <SimulationHeader />
+                <KeyMetrics />
+                <div className="grid gap-6 lg:grid-cols-5">
+                    <div className="lg:col-span-3">
+                        <VelocityChart />
+                    </div>
+                    <div className="lg:col-span-2">
+                        <DecisionPanel />
+                    </div>
+                </div>
+            </div>
+        </SimulationProvider>
     );
 }
