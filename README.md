@@ -1,15 +1,11 @@
-# Bank Reputational Stress-Test (BRST) 🏦
-
-![Status](https://img.shields.io/badge/Status-Prototype-blue)
-![Governance](https://img.shields.io/badge/Governance-Strict%20HITL-green)
-![Data](https://img.shields.io/badge/Data-Synthetic%20Only-orange)
+# Bank Reputational Stress-Test (BRST)
 
 > **A "War Room" Simulator for Banking Resilience.**
 > *An agentic system that detects signal, interprets risk, and forecasts impact—without compromising privacy.*
 
 ---
 
-## 🚀 Executive Summary
+## Executive Summary
 **BRST** is an AI-driven decision support system designed to interpret systemic risk rather than monitor individual behavior. Instead of reacting to real-time noise, BRST uses **Agent-Based Modeling** and **Causal Inference** to predict *why* a social signal matters and *how* it might impact bank operations (e.g., liquidity, call center volume, brand trust).
 
 **Key Differentiation:**
@@ -19,7 +15,7 @@
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 ### 1. The Causal Attribution Engine 🧠
 Distinguishes between harmless noise and systemic threats using multi-agent reasoning.
@@ -39,7 +35,7 @@ A Monte Carlo simulation engine that forecasts the spread of misinformation acro
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```mermaid
 graph TD
@@ -52,3 +48,71 @@ graph TD
     
     style C fill:#f9f,stroke:#333,stroke-width:2px
     style G fill:#bbf,stroke:#333,stroke-width:2px
+
+```
+
+## Tech Stack
+
+* **Core Logic:** Python 3.12+
+* **Agent Orchestration:** Google Antigravity (Agentic Workflow)
+* **Interface:** Streamlit
+* **Data Strategy:** Synthetic JSON Signals & Archetypal Personas
+
+---
+
+## Repository Structure
+
+```bash
+├── data/
+│   ├── synthetic_signals.json    # The "Trigger" signals (No real PII)
+│   ├── social_archetypes.csv     # Abstracted demographic behaviors
+├── src/
+│   ├── agents/                   # Interpretation & Governance Agents
+│   ├── simulator/                # Monte Carlo / Contagion Logic
+│   └── ui/                       # Dashboard Interface
+├── governance/
+│   ├── ETHICS.md                 # Responsible AI Manifesto
+│   └── guardrails.yaml           # Hard-coded constraints
+├── tests/                        # Unit tests for logic verification
+├── requirements.txt
+└── README.md
+
+```
+
+## Responsible AI & Governance
+
+We adhere to a strict **"Human-in-the-Loop" (HITL)** philosophy.
+
+1. **Privacy First:** No PII (Personally Identifiable Information) is processed. All data is synthetic or aggregated.
+2. **Uncertainty Quantification:** All predictions include an "Epistemic Uncertainty" score (0-100%) to prevent overconfidence.
+3. **Explainability:** Every risk score is accompanied by a natural language explanation of the "Drivers" behind it.
+
+---
+
+## Getting Started
+
+1. **Clone the Repo**
+```bash
+git clone [https://github.com/yourusername/Bank-Reputational-Stress-Test.git](https://github.com/yourusername/Bank-Reputational-Stress-Test.git)
+
+```
+
+
+2. **Install Dependencies**
+```bash
+pip install -r requirements.txt
+
+```
+
+
+3. **Run the Simulator**
+```bash
+streamlit run src/ui/dashboard.py
+
+```
+
+
+
+---
+
+*Submitted for the Mashreq AI Hackathon 2025.*
