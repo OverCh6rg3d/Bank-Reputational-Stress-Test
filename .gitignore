@@ -40,20 +40,6 @@ logs/
 .DS_Store
 Thumbs.db
 
-# --- Data ---
-# Ignore large datasets or raw dumps
-data/raw/
-*.csv
-*.json
-*.parquet
-*.db
-*.sqlite3
-
-# ...BUT keep specific sample data for the judges to see
-!data/synthetic_signals.json
-!data/social_archetypes.csv
-!governance/guardrails.yaml
-
 # --- Documentation ---
 site/
 build/

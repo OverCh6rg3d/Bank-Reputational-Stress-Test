@@ -1,0 +1,98 @@
+{
+    "X_Style": {
+        "max_length": 280,
+        "style_traits": [
+            "Short, punchy statements",
+            "Heavy use of hashtags",
+            "Emotional language",
+            "Abbreviations and typos common",
+            "Direct mentions (@)",
+            "Trending topic references"
+        ],
+        "hashtag_count": {
+            "min": 1,
+            "max": 3
+        },
+        "emoji_probability": 0.4,
+        "typo_probability": 0.15,
+        "sample_templates": [
+            "🚨 {claim} {hashtag} @{mention}",
+            "Can't believe {claim}!! Anyone else? {hashtag}",
+            "Just heard {claim}... is this real?? {hashtag}",
+            "WARNING: {claim} happening right now! {hashtag}",
+            "{emotional_opener} {claim} {hashtag} {hashtag}"
+        ]
+    },
+    "Reddit_Style": {
+        "max_length": 2000,
+        "style_traits": [
+            "Longer, detailed posts",
+            "Technical language",
+            "Question-based titles",
+            "Skeptical/analytical tone",
+            "References to other posts",
+            "EDIT: updates common"
+        ],
+        "hashtag_count": {
+            "min": 0,
+            "max": 0
+        },
+        "emoji_probability": 0.1,
+        "typo_probability": 0.05,
+        "sample_templates": [
+            "[Discussion] {title}\n\n{detailed_body}\n\nEDIT: {update}",
+            "Has anyone else experienced {issue}?\n\n{context}\n\nWould appreciate any insights.",
+            "PSA: {warning}\n\n{explanation}\n\nSource: {source}",
+            "Rant: {complaint}\n\n{detailed_experience}\n\nAm I overreacting?",
+            "Question about {topic}\n\n{context}\n\nThanks in advance."
+        ]
+    },
+    "News_Portal": {
+        "max_length": 500,
+        "style_traits": [
+            "Formal headline structure",
+            "Neutral journalistic tone",
+            "Attribution to sources",
+            "Date and location references",
+            "Professional vocabulary",
+            "No hashtags or emojis"
+        ],
+        "hashtag_count": {
+            "min": 0,
+            "max": 0
+        },
+        "emoji_probability": 0.0,
+        "typo_probability": 0.02,
+        "sample_templates": [
+            "BREAKING: {headline}\n\n{location} - {body}\n\nSource: {source}",
+            "{headline}\n\nAccording to {source}, {body}",
+            "UPDATE: {headline}\n\n{body}\n\n[Developing story]",
+            "{location}: {headline}\n\n{body}\n\nMore details to follow.",
+            "EXCLUSIVE: {headline}\n\n{body}\n\nReached for comment, {response}"
+        ]
+    },
+    "LinkedIn_Style": {
+        "max_length": 1300,
+        "style_traits": [
+            "Professional tone",
+            "Personal anecdotes",
+            "Industry jargon",
+            "Thought leadership style",
+            "Call to action endings",
+            "Hashtags at end only"
+        ],
+        "hashtag_count": {
+            "min": 2,
+            "max": 5
+        },
+        "emoji_probability": 0.25,
+        "typo_probability": 0.03,
+        "sample_templates": [
+            "{opener}\n\n{personal_story}\n\n{insight}\n\nThoughts? 👇\n\n{hashtags}",
+            "A lesson I learned this week about {topic}:\n\n{story}\n\n{takeaway}\n\n{hashtags}",
+            "🔔 {announcement}\n\n{context}\n\n{call_to_action}\n\n{hashtags}",
+            "Unpopular opinion: {opinion}\n\n{reasoning}\n\nAgree or disagree?\n\n{hashtags}",
+            "{statistic} 📊\n\n{analysis}\n\nWhat does this mean for {industry}?\n\n{hashtags}"
+        ]
+    }
+}

@@ -1,0 +1,240 @@
+{
+    "demographic_segments": {
+        "GenZ": {
+            "age_range": [
+                18,
+                25
+            ],
+            "distribution_weight": 0.25,
+            "financial_literacy": {
+                "mean": 4,
+                "std": 1.5
+            },
+            "brand_loyalty": {
+                "mean": 40,
+                "std": 20
+            },
+            "skepticism_score": {
+                "mean": 5,
+                "std": 2
+            },
+            "network_influence": {
+                "mean": 45,
+                "std": 25
+            },
+            "activity_frequency": {
+                "mean": 3.5,
+                "std": 2
+            },
+            "preferred_platforms": {
+                "X_Style": 0.5,
+                "Reddit_Style": 0.3,
+                "LinkedIn_Style": 0.05,
+                "News_Portal": 0.15
+            }
+        },
+        "Millennial": {
+            "age_range": [
+                26,
+                42
+            ],
+            "distribution_weight": 0.30,
+            "financial_literacy": {
+                "mean": 6,
+                "std": 1.5
+            },
+            "brand_loyalty": {
+                "mean": 55,
+                "std": 20
+            },
+            "skepticism_score": {
+                "mean": 6,
+                "std": 1.5
+            },
+            "network_influence": {
+                "mean": 55,
+                "std": 20
+            },
+            "activity_frequency": {
+                "mean": 2.5,
+                "std": 1.5
+            },
+            "preferred_platforms": {
+                "X_Style": 0.35,
+                "Reddit_Style": 0.25,
+                "LinkedIn_Style": 0.25,
+                "News_Portal": 0.15
+            }
+        },
+        "SME_Owner": {
+            "age_range": [
+                28,
+                55
+            ],
+            "distribution_weight": 0.20,
+            "financial_literacy": {
+                "mean": 7,
+                "std": 1.5
+            },
+            "brand_loyalty": {
+                "mean": 50,
+                "std": 25
+            },
+            "skepticism_score": {
+                "mean": 7,
+                "std": 1.5
+            },
+            "network_influence": {
+                "mean": 60,
+                "std": 20
+            },
+            "activity_frequency": {
+                "mean": 1.5,
+                "std": 1
+            },
+            "preferred_platforms": {
+                "X_Style": 0.2,
+                "Reddit_Style": 0.15,
+                "LinkedIn_Style": 0.5,
+                "News_Portal": 0.15
+            }
+        },
+        "HNI": {
+            "age_range": [
+                35,
+                65
+            ],
+            "distribution_weight": 0.15,
+            "financial_literacy": {
+                "mean": 8,
+                "std": 1
+            },
+            "brand_loyalty": {
+                "mean": 65,
+                "std": 20
+            },
+            "skepticism_score": {
+                "mean": 8,
+                "std": 1
+            },
+            "network_influence": {
+                "mean": 75,
+                "std": 15
+            },
+            "activity_frequency": {
+                "mean": 0.8,
+                "std": 0.5
+            },
+            "preferred_platforms": {
+                "X_Style": 0.15,
+                "Reddit_Style": 0.1,
+                "LinkedIn_Style": 0.55,
+                "News_Portal": 0.2
+            }
+        },
+        "Vulnerable": {
+            "age_range": [
+                20,
+                70
+            ],
+            "distribution_weight": 0.10,
+            "financial_literacy": {
+                "mean": 3,
+                "std": 1.5
+            },
+            "brand_loyalty": {
+                "mean": 30,
+                "std": 25
+            },
+            "skepticism_score": {
+                "mean": 3,
+                "std": 2
+            },
+            "network_influence": {
+                "mean": 25,
+                "std": 15
+            },
+            "activity_frequency": {
+                "mean": 2,
+                "std": 2
+            },
+            "preferred_platforms": {
+                "X_Style": 0.5,
+                "Reddit_Style": 0.2,
+                "LinkedIn_Style": 0.05,
+                "News_Portal": 0.25
+            }
+        }
+    },
+    "core_values_pool": [
+        "Security",
+        "Speed",
+        "Transparency",
+        "Ethics",
+        "Innovation",
+        "Trust",
+        "Convenience",
+        "Privacy",
+        "Stability",
+        "Growth",
+        "Family",
+        "Independence",
+        "Community",
+        "Wealth",
+        "Simplicity",
+        "Technology",
+        "Tradition",
+        "Flexibility",
+        "Status",
+        "Fairness"
+    ],
+    "value_correlations": {
+        "GenZ": [
+            "Speed",
+            "Innovation",
+            "Technology",
+            "Convenience",
+            "Privacy"
+        ],
+        "Millennial": [
+            "Security",
+            "Growth",
+            "Flexibility",
+            "Family",
+            "Ethics"
+        ],
+        "SME_Owner": [
+            "Stability",
+            "Trust",
+            "Growth",
+            "Independence",
+            "Fairness"
+        ],
+        "HNI": [
+            "Privacy",
+            "Security",
+            "Status",
+            "Wealth",
+            "Trust"
+        ],
+        "Vulnerable": [
+            "Security",
+            "Simplicity",
+            "Trust",
+            "Family",
+            "Stability"
+        ]
+    },
+    "post_category_distribution": {
+        "Fraud_Rumor": 0.20,
+        "Service_Outage": 0.25,
+        "Competitor_News": 0.15,
+        "Positive_Neutral": 0.20,
+        "Irrelevant": 0.20
+    },
+    "language_distribution": {
+        "en": 0.60,
+        "ar": 0.30,
+        "mix": 0.10
+    }
+}

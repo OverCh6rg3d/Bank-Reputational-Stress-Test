@@ -1,0 +1,379 @@
+[
+  {
+    "scenario_id": "142c7e31-e779-4f0b-a320-d810fc7ca38a",
+    "created_at": "2026-01-30T21:20:38.924952",
+    "scenario_name": "Data Leak Panic",
+    "description": "A rumor spreads that customer data has been leaked from a third-party vendor. High fear, rapid spread.",
+    "trigger_category": "Fraud_Rumor",
+    "target_segment": "All",
+    "simulation_duration_hours": 24,
+    "severity_level": "Critical",
+    "expected_velocity_peak": 85,
+    "recommended_response_time_hours": 2,
+    "key_narratives": [
+      "Customer database leaked on dark web",
+      "Third-party vendor breach",
+      "Personal information for sale"
+    ],
+    "monitoring_keywords": [
+      "leak",
+      "breach",
+      "data",
+      "hacked",
+      "dark web",
+      "personal info",
+      "sold"
+    ],
+    "potential_impact": {
+      "trust_erosion": "High",
+      "customer_churn_risk": "Medium-High",
+      "regulatory_attention": "High",
+      "media_coverage": "Likely"
+    }
+  },
+  {
+    "scenario_id": "ce2c830f-e651-488b-b5e4-3db8379fd98e",
+    "created_at": "2026-01-30T21:20:38.924977",
+    "scenario_name": "OTP Bypass Exploit",
+    "description": "Technical claims about OTP security vulnerability spread among tech-savvy users.",
+    "trigger_category": "Fraud_Rumor",
+    "target_segment": "HNI",
+    "simulation_duration_hours": 12,
+    "severity_level": "Critical",
+    "expected_velocity_peak": 90,
+    "recommended_response_time_hours": 1,
+    "key_narratives": [
+      "OTP intercept vulnerability discovered",
+      "Hackers bypassing 2FA",
+      "SS7 attack on banking OTPs"
+    ],
+    "monitoring_keywords": [
+      "OTP",
+      "bypass",
+      "hack",
+      "2FA",
+      "vulnerability",
+      "SS7",
+      "intercept"
+    ],
+    "potential_impact": {
+      "trust_erosion": "Critical",
+      "customer_churn_risk": "Medium",
+      "regulatory_attention": "Very High",
+      "media_coverage": "Very Likely"
+    }
+  },
+  {
+    "scenario_id": "6ed638d8-2666-485a-a305-17b039fe5e91",
+    "created_at": "2026-01-30T21:20:38.924987",
+    "scenario_name": "App Outage Cascade",
+    "description": "Extended app downtime during salary week causes mass complaints and competitor comparisons.",
+    "trigger_category": "Service_Outage",
+    "target_segment": "GenZ,Millennial",
+    "simulation_duration_hours": 6,
+    "severity_level": "High",
+    "expected_velocity_peak": 75,
+    "recommended_response_time_hours": 0.5,
+    "key_narratives": [
+      "App down during salary credits",
+      "Can't access money for bills",
+      "Moving to competitor"
+    ],
+    "monitoring_keywords": [
+      "app down",
+      "not working",
+      "can't login",
+      "salary",
+      "bills",
+      "switch bank"
+    ],
+    "potential_impact": {
+      "trust_erosion": "Medium",
+      "customer_churn_risk": "High",
+      "regulatory_attention": "Low",
+      "media_coverage": "Possible"
+    }
+  },
+  {
+    "scenario_id": "fb75aa78-07aa-4dfd-8f38-1f64d0941caf",
+    "created_at": "2026-01-30T21:20:38.924994",
+    "scenario_name": "Fee Increase Backlash",
+    "description": "Rumors about hidden fee increases spread, amplified by competitor marketing.",
+    "trigger_category": "Competitor_News",
+    "target_segment": "SME_Owner",
+    "simulation_duration_hours": 48,
+    "severity_level": "Medium",
+    "expected_velocity_peak": 55,
+    "recommended_response_time_hours": 4,
+    "key_narratives": [
+      "Hidden fee increases without notice",
+      "Competitor offers better rates",
+      "Business account charges doubled"
+    ],
+    "monitoring_keywords": [
+      "fees",
+      "hidden",
+      "charges",
+      "expensive",
+      "switch",
+      "competitor",
+      "better"
+    ],
+    "potential_impact": {
+      "trust_erosion": "Medium",
+      "customer_churn_risk": "High",
+      "regulatory_attention": "Low",
+      "media_coverage": "Unlikely"
+    }
+  },
+  {
+    "scenario_id": "7c495b12-60a9-45f6-8a2c-96034c717a1c",
+    "created_at": "2026-01-30T21:20:38.925001",
+    "scenario_name": "Phishing Wave",
+    "description": "Coordinated phishing campaign targets customers with convincing fake communications.",
+    "trigger_category": "Fraud_Rumor",
+    "target_segment": "Vulnerable",
+    "simulation_duration_hours": 18,
+    "severity_level": "High",
+    "expected_velocity_peak": 70,
+    "recommended_response_time_hours": 1,
+    "key_narratives": [
+      "Realistic phishing emails circulating",
+      "Customers losing money to scams",
+      "Bank not warning customers fast enough"
+    ],
+    "monitoring_keywords": [
+      "phishing",
+      "email",
+      "fake",
+      "scam",
+      "lost money",
+      "warning",
+      "alert"
+    ],
+    "potential_impact": {
+      "trust_erosion": "High",
+      "customer_churn_risk": "Medium",
+      "regulatory_attention": "High",
+      "media_coverage": "Likely"
+    }
+  },
+  {
+    "scenario_id": "c7d24d10-1cf9-4b51-9ea0-53d434518c10",
+    "created_at": "2026-01-30T21:20:38.925008",
+    "scenario_name": "Customer Service Meltdown",
+    "description": "Multiple customers report long wait times and unresolved issues simultaneously.",
+    "trigger_category": "Service_Outage",
+    "target_segment": "All",
+    "simulation_duration_hours": 12,
+    "severity_level": "Medium",
+    "expected_velocity_peak": 60,
+    "recommended_response_time_hours": 2,
+    "key_narratives": [
+      "Hours on hold with no response",
+      "Issues not resolved after multiple calls",
+      "Inconsistent information from agents"
+    ],
+    "monitoring_keywords": [
+      "customer service",
+      "no response",
+      "hours",
+      "waiting",
+      "not resolved",
+      "useless"
+    ],
+    "potential_impact": {
+      "trust_erosion": "Medium",
+      "customer_churn_risk": "Medium",
+      "regulatory_attention": "Low",
+      "media_coverage": "Unlikely"
+    }
+  },
+  {
+    "scenario_id": "81a3fdcc-2519-40f7-be29-5679800158b7",
+    "created_at": "2026-01-30T21:20:38.925014",
+    "scenario_name": "Competitor Viral Campaign",
+    "description": "A competitor launches aggressive marketing highlighting gaps in your services.",
+    "trigger_category": "Competitor_News",
+    "target_segment": "GenZ,Millennial",
+    "simulation_duration_hours": 72,
+    "severity_level": "Low",
+    "expected_velocity_peak": 40,
+    "recommended_response_time_hours": 12,
+    "key_narratives": [
+      "Competitor offering cashback for switching",
+      "Side-by-side comparison going viral",
+      "Influencers promoting competitor"
+    ],
+    "monitoring_keywords": [
+      "switch",
+      "better",
+      "cashback",
+      "promo",
+      "influencer",
+      "comparison"
+    ],
+    "potential_impact": {
+      "trust_erosion": "Low",
+      "customer_churn_risk": "Medium",
+      "regulatory_attention": "None",
+      "media_coverage": "Unlikely"
+    }
+  },
+  {
+    "scenario_id": "50fce2c8-b842-4af0-b456-d146d1577ab7",
+    "created_at": "2026-01-30T21:20:38.925020",
+    "scenario_name": "International Transfer Freeze",
+    "description": "Customers report international transfers stuck or reversed, causing panic.",
+    "trigger_category": "Service_Outage",
+    "target_segment": "HNI,SME_Owner",
+    "simulation_duration_hours": 8,
+    "severity_level": "High",
+    "expected_velocity_peak": 70,
+    "recommended_response_time_hours": 1,
+    "key_narratives": [
+      "International transfers failing",
+      "Money stuck in limbo for days",
+      "Business payments not reaching suppliers"
+    ],
+    "monitoring_keywords": [
+      "international",
+      "transfer",
+      "stuck",
+      "failed",
+      "payment",
+      "abroad",
+      "supplier"
+    ],
+    "potential_impact": {
+      "trust_erosion": "High",
+      "customer_churn_risk": "High",
+      "regulatory_attention": "Medium",
+      "media_coverage": "Possible"
+    }
+  },
+  {
+    "scenario_id": "8c6871ad-017e-4925-99d2-e27a5b2a5382",
+    "created_at": "2026-01-30T21:20:38.925027",
+    "scenario_name": "Coordinated Bot Attack",
+    "description": "Suspected bot network flooding social media with negative content.",
+    "trigger_category": "Fraud_Rumor",
+    "target_segment": "All",
+    "simulation_duration_hours": 4,
+    "severity_level": "Medium",
+    "expected_velocity_peak": 95,
+    "recommended_response_time_hours": 0.5,
+    "key_narratives": [
+      "Sudden spike in identical complaints",
+      "Suspicious new accounts posting",
+      "Coordinated negative campaign"
+    ],
+    "monitoring_keywords": [
+      "multiple",
+      "same",
+      "suspicious",
+      "accounts",
+      "coordinated",
+      "attack"
+    ],
+    "potential_impact": {
+      "trust_erosion": "Low-Medium",
+      "customer_churn_risk": "Low",
+      "regulatory_attention": "Low",
+      "media_coverage": "Unlikely"
+    }
+  },
+  {
+    "scenario_id": "9ae138a4-a53e-4edd-8699-97f6fd64b126",
+    "created_at": "2026-01-30T21:20:38.925033",
+    "scenario_name": "Positive Viral Campaign",
+    "description": "Organic positive sentiment following product launch or customer success story.",
+    "trigger_category": "Positive_Neutral",
+    "target_segment": "All",
+    "simulation_duration_hours": 24,
+    "severity_level": "Positive",
+    "expected_velocity_peak": 50,
+    "recommended_response_time_hours": 4,
+    "key_narratives": [
+      "Customer success story going viral",
+      "New feature praised by users",
+      "Community appreciation post"
+    ],
+    "monitoring_keywords": [
+      "love",
+      "amazing",
+      "great",
+      "thank you",
+      "recommend",
+      "best"
+    ],
+    "potential_impact": {
+      "trust_erosion": "Negative (Improvement)",
+      "customer_churn_risk": "Low",
+      "regulatory_attention": "None",
+      "media_coverage": "Possible (Positive)"
+    }
+  },
+  {
+    "scenario_id": "20343cd3-631e-465a-a826-dc4a090fbe18",
+    "created_at": "2026-01-30T21:20:38.925040",
+    "scenario_name": "Insider Threat Rumor",
+    "description": "Claims of employee involvement in fraud or data theft spread online.",
+    "trigger_category": "Fraud_Rumor",
+    "target_segment": "HNI",
+    "simulation_duration_hours": 36,
+    "severity_level": "Critical",
+    "expected_velocity_peak": 80,
+    "recommended_response_time_hours": 2,
+    "key_narratives": [
+      "Employee selling customer data",
+      "Internal access misused",
+      "Former employee with grudge leaking info"
+    ],
+    "monitoring_keywords": [
+      "employee",
+      "insider",
+      "internal",
+      "selling data",
+      "access",
+      "corrupt"
+    ],
+    "potential_impact": {
+      "trust_erosion": "Critical",
+      "customer_churn_risk": "Medium-High",
+      "regulatory_attention": "Very High",
+      "media_coverage": "Very Likely"
+    }
+  },
+  {
+    "scenario_id": "b0d40290-5ab9-4385-9169-fd5309837e11",
+    "created_at": "2026-01-30T21:20:38.925046",
+    "scenario_name": "ATM Network Failure",
+    "description": "Widespread ATM outages across the city during peak hours.",
+    "trigger_category": "Service_Outage",
+    "target_segment": "All",
+    "simulation_duration_hours": 4,
+    "severity_level": "High",
+    "expected_velocity_peak": 65,
+    "recommended_response_time_hours": 0.5,
+    "key_narratives": [
+      "All ATMs showing out of order",
+      "Can't withdraw cash for emergency",
+      "No alternative payment options"
+    ],
+    "monitoring_keywords": [
+      "ATM",
+      "out of order",
+      "cash",
+      "withdraw",
+      "emergency",
+      "down"
+    ],
+    "potential_impact": {
+      "trust_erosion": "Medium",
+      "customer_churn_risk": "Low",
+      "regulatory_attention": "Low",
+      "media_coverage": "Possible"
+    }
+  }
+]
