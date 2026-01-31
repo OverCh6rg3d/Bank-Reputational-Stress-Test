@@ -25,8 +25,9 @@ class StartSimulationRequest(BaseModel):
 
 
 class GenerateSignalsRequest(BaseModel):
-    scenario_id: UUID
-    count: int = 10
+    scenario_id: Optional[UUID] = None
+    scenario_name: Optional[str] = None
+    count_per_level: int = 15
     platform_distribution: Optional[Dict[str, float]] = None
 
 

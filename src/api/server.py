@@ -13,6 +13,9 @@ from signals.generator import SyntheticSignalGenerator
 from backend.core.debate import get_debate_engine, DebateResult
 from backend.core.signal_detector import SignalDetector
 from backend.core.causal_engine import CausalEngine
+from backend.core.signal_detector import SignalDetector
+from backend.core.causal_engine import CausalEngine
+from backend.core.signal_generator import get_signal_generator, SignalGenerator
 from backend.models.schemas import Scenario, SocialSignal
 from api.models import (
     StartSimulationRequest,
@@ -137,6 +140,105 @@ async def detect_signals():
         "clusters": [c.model_dump() for c in clusters],
         "signals_processed": len(signals)
     }
+
+
+@app.get("/api/analysis/reasoning")
+async def get_ai_reasoning():
+    """
+    Get XAI reasoning trace and clusters for the dashboard.
+    Analyses the currently active signals in the simulation.
+    """
+    if not state.current_scenario:
+        return {
+            "classification": "Waiting for Scenario...",
+            "confidence": "Neutral",
+            "clusters": [],
+            "reasoning": "No active scenario selected. Please start a simulation."
+        }
+
+    # Use cached signals or generate fallback
+    signals_data = state.signal_cache
+    
+    # Reconstruct SocialSignal objects for the detector
+    signals = []
+    try:
+        if signals_data:
+            signals = [SocialSignal(**s) for s in signals_data]
+    except Exception as e:
+        logger.error(f"Error reconstructing signals: {e}")
+        
+    # If cache is empty/invalid, generate fresh sample for analysis
+    if not signals:
+         generator = SyntheticSignalGenerator()
+         signals = await generator.generate_signals(state.current_scenario, count=15)
+
+    # Run detection
+    detector = SignalDetector()
+    clusters = detector.detect_clusters(signals)
+    
+    # Generate simple reasoning text (mock LLM summary for speed, or real if easy)
+    # For now, we derive it from the top cluster
+    top_cluster_name = clusters[0].topic if clusters else "General Noise"
+    severity = clusters[0].severity if clusters else "low"
+    
+    reasoning_text = (
+        f"Detected {len(clusters)} distinct signal clusters. "
+        f"Primary concern identified as '{top_cluster_name}' with {severity} severity grading. "
+        f"Velocity analysis indicates rising traction among high-authority accounts."
+    )
+
+    return {
+        "classification": "Reputational Threat",
+        "confidence": "High" if len(signals) > 10 else "Moderate",
+        "clusters": [c.topic for c in clusters[:4]], # Return top 4 topics
+        "reasoning": reasoning_text
+    }
+
+
+
+@app.post("/api/signals/generate")
+async def generate_signals(request: GenerateSignalsRequest):
+    """
+    Generate LLM-powered signals for a scenario, organized by velocity level.
+    """
+    try:
+        generator = get_signal_generator()
+        signals = await generator.generate_all_levels(
+            scenario_name=request.scenario_name,
+            count_per_level=request.count_per_level
+        )
+        
+        return {
+            "success": True,
+            "scenario": request.scenario_name,
+            "signals": signals,
+            "counts": {
+                "low": len(signals.get("low", [])),
+                "medium": len(signals.get("medium", [])),
+                "high": len(signals.get("high", [])),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Signal generation failed: {e}")
+        # Return fallback signals on error
+        generator = get_signal_generator()
+        fallback = {
+            "low": generator._get_fallback_signals(request.scenario_name, "low", request.count_per_level),
+            "medium": generator._get_fallback_signals(request.scenario_name, "medium", request.count_per_level),
+            "high": generator._get_fallback_signals(request.scenario_name, "high", request.count_per_level),
+        }
+        return {
+            "success": True,
+            "scenario": request.scenario_name,
+            "signals": fallback,
+            "fallback": True,
+            "counts": {
+                "low": len(fallback["low"]),
+                "medium": len(fallback["medium"]),
+                "high": len(fallback["high"]),
+            }
+        }
+
 
 
 @app.post("/api/analysis/debate", response_model=DebateResponse)

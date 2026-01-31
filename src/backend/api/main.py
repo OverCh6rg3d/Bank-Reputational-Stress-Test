@@ -37,6 +37,7 @@ from backend.models.schemas import (
     VelocityDataPoint,
 )
 from backend.core.signal_detector import SignalDetector, RAGFactChecker
+from backend.core.signal_generator import get_signal_generator, SignalGenerator
 from backend.core.causal_engine import CausalEngine
 from backend.core.governance import get_governance_gate
 from simulator.engine import ContagionSimulator
@@ -59,7 +60,7 @@ app = FastAPI(
 # Add CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -179,17 +180,184 @@ async def list_signals(
             {
                 "id": str(s.signal_id),
                 "timestamp": s.timestamp.isoformat(),
-                "platform": s.platform_source.value,
-                "content": s.content_text[:300] + "..." if len(s.content_text) > 300 else s.content_text,
+                "platform_source": s.platform_source.value,
+                "content_text": s.content_text[:300] + "..." if len(s.content_text) > 300 else s.content_text,
                 "category": s.gt_category.value,
-                "sentiment": s.gt_sentiment,
-                "virality": s.gt_virality_potential,
+                "gt_sentiment": s.gt_sentiment,
+                "gt_virality_potential": s.gt_virality_potential,
+                "hashtags": s.hashtags,
             }
             for s in signals[:limit]
         ],
         "total": len(signals),
     }
 
+
+# Scenario-specific signal templates for dynamic generation
+SCENARIO_SIGNALS = {
+    "Data Leak": [
+        {"content": "My Mashreq account info might be compromised?? Friend just told me about a data breach 😰 #MashreqBank", "platform": "x_style", "virality": 75, "sentiment": -0.8},
+        {"content": "Anyone else get a suspicious email about Mashreq account verification? Worried it might be related to a leak", "platform": "x_style", "virality": 55, "sentiment": -0.6},
+        {"content": "r/UAE - Reports of unauthorized access to Mashreq accounts. Thread to track affected customers and bank response.", "platform": "reddit_style", "virality": 88, "sentiment": -0.9},
+        {"content": "Just changed all my Mashreq passwords. Better safe than sorry with these data leak rumors going around", "platform": "x_style", "virality": 42, "sentiment": -0.4},
+        {"content": "BREAKING: Potential customer data exposure at major UAE bank. Sources say thousands affected. #Banking #CyberSecurity", "platform": "news_portal", "virality": 92, "sentiment": -0.85},
+        {"content": "Called Mashreq support about the breach - 45 min wait time. Not reassuring at all 🙄", "platform": "x_style", "virality": 65, "sentiment": -0.7},
+        {"content": "Is it just me or is anyone else seeing strange transactions on their Mashreq statement? Getting worried here", "platform": "x_style", "virality": 70, "sentiment": -0.75},
+        {"content": "Tech expert here: If the Mashreq leak is real, they likely exposed hashed passwords at minimum. Change your credentials NOW.", "platform": "reddit_style", "virality": 82, "sentiment": -0.65},
+    ],
+    "Outage": [
+        {"content": "Mashreq app is DOWN again! Third time this week, seriously considering switching banks 😤 #MashreqDown", "platform": "x_style", "virality": 68, "sentiment": -0.75},
+        {"content": "Can't access my account. Is Mashreq having server issues today? Need to pay my rent urgently!", "platform": "x_style", "virality": 45, "sentiment": -0.5},
+        {"content": "Mashreq ATM network seems to be down across Dubai. Multiple branches affected. #ServiceOutage", "platform": "x_style", "virality": 72, "sentiment": -0.7},
+        {"content": "r/dubai - PSA: Mashreq online banking not working. Anyone know when it'll be back?", "platform": "reddit_style", "virality": 55, "sentiment": -0.55},
+        {"content": "Just got locked out of my Mashreq account during a transfer. Money stuck in limbo. Not happy.", "platform": "x_style", "virality": 78, "sentiment": -0.85},
+        {"content": "Major banking outage affecting UAE customers as Mashreq systems experience technical difficulties", "platform": "news_portal", "virality": 80, "sentiment": -0.6},
+    ],
+    "Deepfake": [
+        {"content": "WATCH: Video of Mashreq CEO admitting to fraud just leaked! Is this real?? 🤯 #MashreqScandal", "platform": "x_style", "virality": 95, "sentiment": -0.95},
+        {"content": "That Mashreq CEO video looks AI-generated to me. Check the weird lip sync at 0:47. Classic deepfake signs.", "platform": "reddit_style", "virality": 78, "sentiment": -0.3},
+        {"content": "Whether that video is real or not, the damage to Mashreq's reputation is already done. Stock plunging.", "platform": "x_style", "virality": 85, "sentiment": -0.8},
+        {"content": "Media experts analyzing viral Mashreq executive video for signs of AI manipulation", "platform": "news_portal", "virality": 88, "sentiment": -0.5},
+        {"content": "This deepfake technology is getting scary. If the Mashreq video is fake, how do we trust ANY video evidence now?", "platform": "x_style", "virality": 72, "sentiment": -0.6},
+        {"content": "URGENT: DO NOT SHARE the Mashreq CEO video until verified. Spreading potential misinformation helps no one.", "platform": "x_style", "virality": 65, "sentiment": -0.4},
+    ],
+}
+
+import random
+from datetime import timedelta
+
+@app.get("/api/signals/scenario/{scenario_name}")
+async def get_scenario_signals(
+    scenario_name: str,
+    limit: int = Query(default=10, le=50),
+    hour: int = Query(default=0, ge=0, le=72),
+):
+    """
+    Generate dynamic signals for a specific scenario.
+    
+    Signals become more frequent and viral as the hour increases (simulating crisis escalation).
+    """
+    # Find matching scenario template
+    scenario_key = None
+    for key in SCENARIO_SIGNALS.keys():
+        if key.lower() in scenario_name.lower():
+            scenario_key = key
+            break
+    
+    if not scenario_key:
+        scenario_key = "Data Leak"  # Default
+    
+    templates = SCENARIO_SIGNALS[scenario_key]
+    
+    # Generate signals based on current simulation hour
+    # More signals and higher virality in early crisis hours
+    crisis_intensity = min(1.0, 0.3 + (hour / 24) * 0.7) if hour <= 24 else max(0.3, 1.0 - ((hour - 24) / 48) * 0.5)
+    
+    generated = []
+    now = datetime.now()
+    
+    for i in range(min(limit, len(templates))):
+        template = templates[i % len(templates)]
+        
+        # Add time-based variation to virality
+        virality_boost = random.uniform(-10, 15) * crisis_intensity
+        final_virality = min(100, max(0, template["virality"] + virality_boost))
+        
+        # Add slight variation to sentiment
+        sentiment_var = random.uniform(-0.1, 0.1)
+        final_sentiment = max(-1, min(1, template["sentiment"] + sentiment_var))
+        
+        # Stagger timestamps
+        signal_time = now - timedelta(minutes=random.randint(0, 30) + i * 5)
+        
+        # Extract hashtags from content
+        import re
+        hashtags = re.findall(r'#(\w+)', template["content"])
+        
+        generated.append({
+            "id": f"gen-{scenario_key[:3]}-{hour}-{i}",
+            "timestamp": signal_time.isoformat(),
+            "platform_source": template["platform"],
+            "content_text": template["content"],
+            "gt_sentiment": round(final_sentiment, 2),
+            "gt_virality_potential": round(final_virality),
+            "hashtags": hashtags,
+            "category": scenario_key.lower().replace(" ", "_"),
+        })
+    
+    # Sort by virality (most viral first during crisis)
+    generated.sort(key=lambda x: x["gt_virality_potential"], reverse=True)
+    
+    return {
+        "signals": generated[:limit],
+        "scenario": scenario_key,
+        "hour": hour,
+        "intensity": round(crisis_intensity, 2),
+    }
+
+
+class GenerateSignalsRequest(BaseModel):
+    """Request body for LLM signal generation."""
+    scenario_name: str
+    count_per_level: int = 15
+
+
+@app.post("/api/signals/generate")
+async def generate_signals(request: GenerateSignalsRequest):
+    """
+    Generate LLM-powered signals for a scenario, organized by velocity level.
+    
+    This is the "pre-seeding" endpoint - call before starting simulation
+    to generate unique, scenario-specific signals in three intensity levels.
+    
+    Returns:
+        {
+            "low": [...],      # Confusion phase signals
+            "medium": [...],   # Frustration phase signals
+            "high": [...]      # Outrage phase signals
+        }
+    """
+    try:
+        generator = get_signal_generator()
+        signals = await generator.generate_all_levels(
+            scenario_name=request.scenario_name,
+            count_per_level=request.count_per_level
+        )
+        
+        return {
+            "success": True,
+            "scenario": request.scenario_name,
+            "signals": signals,
+            "counts": {
+                "low": len(signals.get("low", [])),
+                "medium": len(signals.get("medium", [])),
+                "high": len(signals.get("high", [])),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Signal generation failed: {e}")
+        # Return fallback signals on error
+        generator = get_signal_generator()
+        fallback = {
+            "low": generator._get_fallback_signals(request.scenario_name, "low", request.count_per_level),
+            "medium": generator._get_fallback_signals(request.scenario_name, "medium", request.count_per_level),
+            "high": generator._get_fallback_signals(request.scenario_name, "high", request.count_per_level),
+        }
+        return {
+            "success": True,
+            "scenario": request.scenario_name,
+            "signals": fallback,
+            "fallback": True,
+            "counts": {
+                "low": len(fallback["low"]),
+                "medium": len(fallback["medium"]),
+                "high": len(fallback["high"]),
+            }
+        }
+
+@app.get("/api/test_route")
+async def test_route():
+    return {"message": "I am working"}
 
 @app.get("/api/agents")
 async def list_agents(limit: int = Query(default=20, le=200)):
@@ -763,5 +931,6 @@ async def calibrate_confidence(confidence: float):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 

@@ -41,6 +41,46 @@ export const api = {
     },
 
     /**
+     * Get scenario-specific generated signals
+     */
+    async getScenarioSignals(scenarioName, limit = 10, hour = 0) {
+        const params = new URLSearchParams({ limit, hour });
+        const encodedName = encodeURIComponent(scenarioName);
+        const response = await fetch(`${API_BASE}/api/signals/scenario/${encodedName}?${params}`);
+        if (!response.ok) throw new Error('Failed to fetch scenario signals');
+        return response.json();
+    },
+
+    /**
+     * Generate LLM-powered signals for a scenario (pre-seeding)
+     * Call this before starting simulation to generate unique signals
+     * organized by velocity level (low, medium, high)
+     */
+    async generateSignals(scenarioName, countPerLevel = 15) {
+        const response = await fetch(`${API_BASE}/api/signals/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                scenario_name: scenarioName,
+                count_per_level: countPerLevel
+            })
+        });
+        if (!response.ok) throw new Error('Failed to generate signals');
+        return response.json();
+    },
+
+    async getAIReasoning() {
+        try {
+            const response = await fetch(`${API_BASE}/api/analysis/reasoning`);
+            if (!response.ok) return null;
+            return response.json();
+        } catch (error) {
+            console.error('Failed to fetch AI reasoning:', error);
+            return null;
+        }
+    },
+
+    /**
      * Get agent archetypes
      */
     async getAgents(limit = 20) {
