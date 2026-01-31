@@ -246,6 +246,15 @@ function DecisionPanel() {
 
     const rec = getRecommendation();
 
+    const handleApprove = async () => {
+        try {
+            await api.recordDecision("inc-001", "APPROVE", "user-1", rec.action);
+            setStatus('approved');
+        } catch (e) {
+            console.error("Failed to record decision:", e);
+        }
+    };
+
     return (
         <Card className={`bg-card/50 backdrop-blur border-l-4 ${status === 'approved' ? 'border-l-green-500' :
             status === 'rejected' ? 'border-l-destructive' : 'border-l-purple-500'
@@ -269,7 +278,7 @@ function DecisionPanel() {
 
                 {status === 'approved' && (
                     <div className="p-3 bg-green-500/10 rounded border border-green-500/30 text-sm text-green-400 flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4" /> Strategy approved. Ready for execution.
+                        <CheckCircle className="h-4 w-4" /> Strategy approved. Mitigation active.
                     </div>
                 )}
                 {status === 'rejected' && (
@@ -287,7 +296,7 @@ function DecisionPanel() {
                     >
                         Reject
                     </Button>
-                    <Button onClick={() => setStatus('approved')}>
+                    <Button onClick={handleApprove}>
                         <CheckCircle className="mr-2 h-4 w-4" /> Approve Strategy
                     </Button>
                 </CardFooter>
@@ -295,6 +304,11 @@ function DecisionPanel() {
         </Card>
     );
 }
+import { api } from '../services/api';
+
+import { SignalFeed } from '../components/dashboard/SignalFeed';
+import { DebateViewer } from '../components/dashboard/DebateViewer';
+import { ExplainabilityPanel } from '../components/dashboard/ExplainabilityPanel';
 
 // --- MAIN DASHBOARD ---
 export default function Dashboard() {
@@ -303,12 +317,17 @@ export default function Dashboard() {
             <div className="space-y-6 pb-8">
                 <SimulationHeader />
                 <KeyMetrics />
+
+                {/* Top Row: Main Chart & Signals */}
                 <div className="grid gap-6 lg:grid-cols-5">
-                    <div className="lg:col-span-3">
+                    <div className="lg:col-span-3 space-y-6">
                         <VelocityChart />
+                        <DebateViewer />
                     </div>
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 space-y-6">
                         <DecisionPanel />
+                        <SignalFeed />
+                        <ExplainabilityPanel />
                     </div>
                 </div>
             </div>

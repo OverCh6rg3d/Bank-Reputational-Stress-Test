@@ -60,6 +60,7 @@ class ContagionSimulator:
         # State
         self._agents: Optional[list[AgentArchetype]] = None
         self._current_simulation: Optional[ContagionResult] = None
+        self.dampening_factor: float = 1.0  # 1.0 = No intervention, 0.0 = Full suppression
 
     @property
     def agents(self) -> list[AgentArchetype]:
@@ -78,6 +79,11 @@ class ContagionSimulator:
             a for a in self.agents
             if any(seg.lower() in a.demographic_segment.lower() for seg in segments)
         ]
+
+    def apply_intervention(self, effectiveness: float = 0.5):
+        """Reduce viral velocity by a percentage (0.0 to 1.0)."""
+        self.dampening_factor = max(0.0, 1.0 - effectiveness)
+        logger.info(f"Intervention applied. Dampening factor set to {self.dampening_factor}")
 
     async def run_simulation(
         self,
@@ -260,6 +266,9 @@ class ContagionSimulator:
             
             velocity = min(100, base_velocity * severity_boost + momentum * 30 + len(infected_agents) * 0.5)
             
+            # Apply intervention dampening
+            velocity = velocity * self.dampening_factor
+            
             # Add some noise for realism
             velocity += random.uniform(-3, 3)
             velocity = max(0, min(100, velocity))
@@ -338,16 +347,23 @@ class ContagionSimulator:
         if self._current_simulation is None:
             return {
                 "velocity": 0,
-                "confidence": 85,
+                "confidence": 0, # Should be 0 until simulation starts
                 "alerts": 0,
             }
         
         result = self._current_simulation
         latest = result.velocity_trajectory[-1] if result.velocity_trajectory else None
         
+        conf = 0
+        if latest:
+            calc = 95 - (int(latest.velocity) // 4)
+            conf = max(60, calc)
+            logger.info(f"[DEBUG] Velocity: {latest.velocity}, Calc: {calc}, Final Conf: {conf}")
+
         return {
             "velocity": latest.velocity if latest else 0,
-            "confidence": 85 - (10 if result.is_coordinated_attack else 0),
+            # Dynamic confidence: Starts high (95%), decreases as chaos (velocity) increases
+            "confidence": conf,
             "alerts": 1 if result.peak_velocity > 80 else 0,
             "peak_velocity": result.peak_velocity,
             "time_to_critical": result.time_to_critical,

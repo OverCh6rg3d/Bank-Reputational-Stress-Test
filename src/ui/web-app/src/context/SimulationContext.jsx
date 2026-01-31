@@ -46,7 +46,7 @@ export const SimulationProvider = ({ children }) => {
     // Risk Metrics
     const [metrics, setMetrics] = useState({
         velocity: 12,
-        confidence: 85,
+        confidence: 0,
         alerts: 0,
         peak_velocity: 0,
         time_to_critical: null,
@@ -163,7 +163,7 @@ export const SimulationProvider = ({ children }) => {
         setStartTime(now);
         setTimeHorizon(0);
         setVelocityHistory(generateHistoricalBaseline(now));
-        setMetrics({ velocity: 12, confidence: 85, alerts: 0, peak_velocity: 0, time_to_critical: null, total_shares: 0 });
+        setMetrics({ velocity: 12, confidence: 0, alerts: 0, peak_velocity: 0, time_to_critical: null, total_shares: 0 });
 
         if (useBackend && wsRef.current && connected) {
             // Start via WebSocket
@@ -195,7 +195,7 @@ export const SimulationProvider = ({ children }) => {
         setStartTime(now);
         setTimeHorizon(0);
         setVelocityHistory(generateHistoricalBaseline(now));
-        setMetrics({ velocity: 12, confidence: 85, alerts: 0, peak_velocity: 0, time_to_critical: null, total_shares: 0 });
+        setMetrics({ velocity: 12, confidence: 0, alerts: 0, peak_velocity: 0, time_to_critical: null, total_shares: 0 });
     }, [useBackend]);
 
     const selectScenario = useCallback((scenarioNameOrId) => {
@@ -241,6 +241,7 @@ export const SimulationProvider = ({ children }) => {
                     return {
                         ...prev,
                         velocity: newVelocity,
+                        confidence: Math.max(60, 95 - Math.floor(newVelocity / 4)),
                         peak_velocity: Math.max(prev.peak_velocity, newVelocity),
                         alerts: newVelocity > 50 ? prev.alerts + (Math.random() > 0.6 ? 1 : 0) : prev.alerts
                     };

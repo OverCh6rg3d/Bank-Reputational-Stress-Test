@@ -180,6 +180,39 @@ class SyntheticSignalGenerator:
                 logger.warning(f"Error parsing generated signal item: {e}")
                 continue
 
+        # Fallback if no signals generated (ensure demo robustness)
+        if not signals:
+            logger.warning(f"LLM failed to generate signals for {platform}, using fallback.")
+            fallback_titles = [
+                f"Is anyone else having issues with Mashreq app? #{scenario.trigger_category.value}",
+                f"Hearing rumors about a {scenario.scenario_name}. Can we get a statement? @Mashreq",
+                f"Seriously concerned about my data security right now. #failures",
+                f"Just saw the news about the bank. This looks bad.",
+                f"Waiting for an official update. Silence is deafening. @centralbank"
+            ]
+            
+            for i, content in enumerate(fallback_titles):
+                if i >= count: break
+                try:
+                    sig = SocialSignal(
+                        signal_id=uuid4(),
+                        timestamp=datetime.now(),
+                        platform_source=platform,
+                        author_id=uuid4(),
+                        content_text=content,
+                        thread_id=uuid4(),
+                        media_type=MediaType.NONE,
+                        hashtags=["risk", "bank"],
+                        mentions=["@Mashreq"],
+                        gt_category=scenario.trigger_category,
+                        gt_sentiment=-0.5,
+                        gt_is_misinformation=False,
+                        gt_virality_potential=50 + i * 10,
+                    )
+                    signals.append(sig)
+                except Exception as e:
+                    logger.error(f"Fallback generation error: {e}")
+
         return signals
 
 # Integration Test

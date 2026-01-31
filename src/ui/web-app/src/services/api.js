@@ -59,11 +59,15 @@ export const api = {
     },
 
     /**
-     * Search knowledge base
+     * Run adversarial debate
      */
-    async searchKnowledge(query) {
-        const response = await fetch(`${API_BASE}/api/knowledge?query=${encodeURIComponent(query)}`);
-        if (!response.ok) throw new Error('Failed to search knowledge');
+    async runDebate(params) {
+        const response = await fetch(`${API_BASE}/api/analysis/debate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+        if (!response.ok) throw new Error('Failed to run debate');
         return response.json();
     },
 
@@ -83,16 +87,7 @@ export const api = {
         });
         if (!response.ok) throw new Error('Failed to record decision');
         return response.json();
-    },
-
-    /**
-     * Get audit log
-     */
-    async getAuditLog(limit = 50) {
-        const response = await fetch(`${API_BASE}/api/governance/audit?limit=${limit}`);
-        if (!response.ok) throw new Error('Failed to fetch audit log');
-        return response.json();
-    },
+    }
 };
 
 /**
