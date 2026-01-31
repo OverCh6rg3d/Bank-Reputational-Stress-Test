@@ -72,7 +72,7 @@ This project strictly adheres to the "No Scraping / No Live Data" constraint by 
 ### 6. Technical Stack Proposal
 *   **Frontend**: Next.js or Streamlit (for rapid dashboard prototyping).
 *   **Orchestration**: LangGraph (perfect for the cyclical simulation of agents) or Autogen.
-*   **LLM Backend**: Gemini 1.5 Pro (long context for analyzing history) or similar.
+*   **LLM Backend**: OpenAI GPT-4o.
 *   **Data Store**: Vector DB (Chroma/Pinecone) for storing and retrieving past simulations (Case-Based Reasoning).
 
 ---

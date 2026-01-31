@@ -8,7 +8,8 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 // --- HEADER COMPONENT ---
 function SimulationHeader() {
     const {
-        activeScenario,
+        scenarios,
+        activeScenarioName,
         setActiveScenario,
         runSimulation,
         pauseSimulation,
@@ -47,8 +48,8 @@ function SimulationHeader() {
                                     key={speed}
                                     onClick={() => setSimulationSpeed(speed)}
                                     className={`px-2 py-1 text-xs rounded transition-colors ${simulationSpeed === speed
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'hover:bg-muted text-muted-foreground'
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'hover:bg-muted text-muted-foreground'
                                         }`}
                                 >
                                     {speed}x
@@ -61,13 +62,23 @@ function SimulationHeader() {
                 {/* Scenario Selector */}
                 <select
                     className="bg-card border border-border rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary"
-                    value={activeScenario}
+                    value={activeScenarioName}
                     onChange={(e) => setActiveScenario(e.target.value)}
                     disabled={isActive}
                 >
-                    <option>Data Leak Rumor</option>
-                    <option>Service Outage</option>
-                    <option>Executive Misconduct (Deepfake)</option>
+                    {scenarios && scenarios.length > 0 ? (
+                        scenarios.map(scenario => (
+                            <option key={scenario.id} value={scenario.name}>
+                                {scenario.name}
+                            </option>
+                        ))
+                    ) : (
+                        <>
+                            <option>Data Leak Rumor</option>
+                            <option>Service Outage</option>
+                            <option>Executive Misconduct (Deepfake)</option>
+                        </>
+                    )}
                 </select>
 
                 {/* Control Buttons */}
@@ -206,21 +217,21 @@ function VelocityChart() {
 
 // --- DECISION PANEL (AI Insight + Governance Combined) ---
 function DecisionPanel() {
-    const { activeScenario, simulationStatus, metrics } = useSimulation();
+    const { activeScenarioName, simulationStatus, metrics } = useSimulation();
     const [status, setStatus] = React.useState("pending");
 
     // Reset status when scenario changes or simulation restarts
     React.useEffect(() => {
         setStatus("pending");
-    }, [activeScenario, simulationStatus]);
+    }, [activeScenarioName, simulationStatus]);
 
     const getRecommendation = () => {
-        if (activeScenario.includes("Data Leak")) {
+        if (activeScenarioName.includes("Data Leak")) {
             return {
-                action: "Issue proactive clarification on vendor security standards.",
-                reasoning: "Signal cluster indicates technical fears regarding 3rd party API access."
+                action: "Issue proactive security clarification",
+                reasoning: "Signal cluster indicates customer anxiety about data practices. Early transparency recommended."
             };
-        } else if (activeScenario.includes("Outage")) {
+        } else if (activeScenarioName.includes("Outage")) {
             return {
                 action: "Post real-time status updates on official channels.",
                 reasoning: "High volume of 'app down' mentions detected. Transparency reduces panic."

@@ -1,6 +1,38 @@
-streamlit
-pandas
-numpy
-plotly
-google-generativeai
-python-dotenv
+# Core Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+websockets>=12.0
+pydantic>=2.5.0
+python-dotenv>=1.0.0
+
+# Data Processing
+pandas>=2.1.0
+numpy>=1.26.0
+
+# Machine Learning & Embeddings
+sentence-transformers>=2.2.2
+scikit-learn>=1.4.0
+chromadb>=0.4.22
+tiktoken>=0.5.0
+
+# LLM Integration
+openai>=1.10.0
+langgraph>=0.2.0
+
+# Visualization (for backend charts)
+plotly>=5.18.0
+
+# PDF Generation
+jinja2>=3.1.2
+weasyprint>=60.2
+
+# Frontend
+streamlit>=1.30.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+httpx>=0.26.0
+
+# Async utilities
+aiofiles>=23.2.1

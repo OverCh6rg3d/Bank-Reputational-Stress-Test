@@ -1,0 +1,124 @@
+# Reputational Stress-Test Simulator - Governance Guardrails
+# Version 1.0
+
+version: "1.0"
+
+# =============================================================================
+# Action Boundaries - Hard blocks on AI behavior
+# =============================================================================
+action_boundaries:
+  - id: no_public_action
+    description: "System NEVER posts to public social media"
+    enforcement: hard_block
+    rationale: "Zero-action protocol - AI is advisory only"
+    
+  - id: human_approval_required
+    description: "All response strategies require human approval"
+    enforcement: hard_block
+    threshold: null  # Always applies
+    
+  - id: no_customer_data
+    description: "System never processes real customer PII"
+    enforcement: hard_block
+    rationale: "Privacy-first design using only synthetic data"
+    
+  - id: no_regulatory_disclosure
+    description: "AI cannot directly communicate with regulators"
+    enforcement: hard_block
+
+# =============================================================================
+# Confidence Thresholds - When to require escalation
+# =============================================================================
+confidence_thresholds:
+  - id: low_confidence_escalation
+    description: "Predictions below 70% confidence automatically escalate"
+    threshold: 0.70
+    action: require_review
+    
+  - id: very_low_confidence_warning
+    description: "Predictions below 50% trigger explicit uncertainty warning"
+    threshold: 0.50
+    action: explicit_warning
+    
+  - id: critical_severity_escalation
+    description: "Critical severity incidents always require C-suite notification"
+    severity: Critical
+    action: immediate_escalation
+    notify: ["CISO", "CCO", "CEO"]
+
+# =============================================================================
+# Socratic Questions - Mandatory review prompts
+# =============================================================================
+socratic_questions:
+  - "What is the worst-case scenario if this prediction is wrong?"
+  - "What evidence would falsify this conclusion?"
+  - "Which demographic segments might be disproportionately affected?"
+  - "What are the regulatory implications of this response?"
+  - "Is there potential for Streisand effect if we act on this?"
+  - "Have we considered the impact on vulnerable customer segments?"
+  - "What is the cost of inaction vs. the cost of overreaction?"
+
+# =============================================================================
+# Audit Log Configuration
+# =============================================================================
+audit_log:
+  enabled: true
+  retention_days: 365
+  immutable: true
+  encryption: AES-256
+  
+  fields:
+    - timestamp
+    - actor_type  # AI or Human
+    - actor_id
+    - action_type
+    - target_incident_id
+    - prediction_summary
+    - confidence_at_time
+    - human_decision
+    - reasoning_provided
+    - time_to_decision
+
+# =============================================================================
+# Escalation Paths
+# =============================================================================
+escalation_paths:
+  Critical:
+    initial_responder: "Risk Analyst"
+    escalation_chain: ["Risk Manager", "CISO", "CEO"]
+    max_response_time_minutes: 30
+    
+  High:
+    initial_responder: "Risk Analyst"
+    escalation_chain: ["Risk Manager", "CISO"]
+    max_response_time_minutes: 120
+    
+  Medium:
+    initial_responder: "Risk Analyst"
+    escalation_chain: ["Risk Manager"]
+    max_response_time_minutes: 480
+    
+  Low:
+    initial_responder: "Risk Analyst"
+    escalation_chain: []
+    max_response_time_minutes: 1440
+
+# =============================================================================
+# Non-Action Boundaries - When NOT to act
+# =============================================================================
+non_action_boundaries:
+  - id: streisand_risk
+    description: "Do not publicly acknowledge rumors that have <1000 reach"
+    threshold_reach: 1000
+    action: monitor_only
+    
+  - id: competitor_noise
+    description: "Do not respond to competitive marketing noise"
+    category: "Competitor_News"
+    severity_max: "Low"
+    action: log_only
+    
+  - id: bot_activity
+    description: "Do not engage with suspected bot networks"
+    bot_confidence_threshold: 0.80
+    action: silent_monitoring
