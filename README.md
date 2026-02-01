@@ -151,7 +151,7 @@ VITE_WS_BASE=ws://localhost:8000
 ---
 
 ## Demo Workflow
-1. Select a scenario (all are **24 hours**).
+1. Select a scenario (simulation time depends on the type of scenario).
 2. Run simulation and observe velocity changes.
 3. Review AI recommendation and optionally escalate.
 4. Generate executive briefing.
