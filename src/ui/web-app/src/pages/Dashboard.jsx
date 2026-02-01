@@ -17,7 +17,8 @@ function SimulationHeader() {
         simulationStatus,
         simulationSpeed,
         setSimulationSpeed,
-        timeHorizon
+        timeHorizon,
+        durationHours
     } = useSimulation();
 
     const speedOptions = [1, 2, 4, 8, 16]; // Higher speeds for 72h simulation
@@ -34,7 +35,7 @@ function SimulationHeader() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Crisis Simulator</h1>
-                <p className="text-muted-foreground mt-1">72-hour stress test • Predict the storm before it hits.</p>
+                <p className="text-muted-foreground mt-1">{durationHours}-hour stress test • Predict the storm before it hits.</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
                 {/* Time & Speed Controls (visible when running or paused) */}
@@ -84,6 +85,8 @@ function SimulationHeader() {
                             <option>Data Leak Rumor</option>
                             <option>Service Outage</option>
                             <option>Executive Misconduct (Deepfake)</option>
+                            <option>Brand Sentiment Shift</option>
+                            <option>Fraud/Scam Rumors</option>
                         </>
                     )}
                 </select>
@@ -123,9 +126,6 @@ function SimulationHeader() {
                         </div>
                         <Button onClick={stopSimulation} variant="outline">
                             <RotateCcw className="mr-2 h-4 w-4" /> Reset
-                        </Button>
-                        <Button onClick={runSimulation}>
-                            <Play className="mr-2 h-4 w-4 fill-current" /> New Simulation
                         </Button>
                     </>
                 )}
@@ -343,6 +343,52 @@ const SCENARIO_STRATEGIES = {
             effectiveness: 0.9,
             risk: "high"
         }
+    ],
+    "Sentiment Shift": [
+        {
+            id: "do_nothing",
+            action: "Do Nothing - Monitor Trend",
+            reasoning: "Observe early signals before responding. Risk: sentiment could deteriorate further.",
+            effectiveness: 0,
+            risk: "medium"
+        },
+        {
+            id: "customer_listening",
+            action: "Increase customer listening and internal escalation",
+            reasoning: "Early sentiment drift suggests reputational risk; strengthen internal feedback loops.",
+            effectiveness: 0.55,
+            risk: "low"
+        },
+        {
+            id: "service_review",
+            action: "Review top complaint themes and prepare response options",
+            reasoning: "Identify drivers behind sentiment to prevent escalation.",
+            effectiveness: 0.65,
+            risk: "low"
+        }
+    ],
+    "Fraud/Scam": [
+        {
+            id: "do_nothing",
+            action: "Do Nothing - Monitor Rumors",
+            reasoning: "Wait for verification. Risk: scams may spread unchecked.",
+            effectiveness: 0,
+            risk: "critical"
+        },
+        {
+            id: "risk_intel",
+            action: "Activate fraud intelligence review",
+            reasoning: "Validate claims and coordinate with security teams.",
+            effectiveness: 0.7,
+            risk: "medium"
+        },
+        {
+            id: "internal_advisory",
+            action: "Prepare internal customer advisory content",
+            reasoning: "Ensure consistent guidance ready for human-approved release.",
+            effectiveness: 0.75,
+            risk: "low"
+        }
     ]
 };
 
@@ -350,6 +396,7 @@ const SCENARIO_STRATEGIES = {
 function DecisionPanel() {
     const {
         activeScenarioName,
+        activeScenario,
         simulationStatus,
         metrics,
         applyIntervention,
@@ -367,6 +414,10 @@ function DecisionPanel() {
     const [aiReasoning, setAiReasoning] = React.useState("");
     const [loading, setLoading] = React.useState(false);
     const [isAiGenerated, setIsAiGenerated] = React.useState(false);
+    const [aiModel, setAiModel] = React.useState(null);
+    const [guardrails, setGuardrails] = React.useState(null);
+    const [escalationStatus, setEscalationStatus] = React.useState("idle");
+    const [escalatedScenarios, setEscalatedScenarios] = React.useState({});
     const lastFetchSignalCount = React.useRef(0); // Track last fetch point (Issue 2)
 
     const velocity = metrics?.velocity || 0;
@@ -383,12 +434,49 @@ function DecisionPanel() {
     const urgency = getUrgency();
 
     // Fallback strategies if API fails with dynamic effectiveness
-    const getFallbackStrategies = () => [
-        { title: "Issue Official Statement", description: "Release transparent communication addressing concerns.", effectiveness: Math.floor(70 + Math.random() * 15), icon: "message" },
-        { title: "Activate Crisis Team", description: "Deploy dedicated response team for real-time monitoring.", effectiveness: Math.floor(65 + Math.random() * 15), icon: "users" },
-        { title: "Engage Key Influencers", description: "Coordinate with trusted voices to counter misinformation.", effectiveness: Math.floor(60 + Math.random() * 10), icon: "trending-down" }
-    ];
+    const getFallbackStrategies = () => {
+        const scenarioKey = (activeScenarioName || '').toLowerCase();
+        const scenarioMatch =
+            scenarioKey.includes('leak') || scenarioKey.includes('breach') || scenarioKey.includes('data')
+                ? 'Data Leak'
+                : scenarioKey.includes('outage') || scenarioKey.includes('service') || scenarioKey.includes('atm')
+                    ? 'Outage'
+                    : scenarioKey.includes('deepfake') || scenarioKey.includes('executive')
+                        ? 'Deepfake'
+                        : scenarioKey.includes('sentiment') || scenarioKey.includes('brand')
+                            ? 'Sentiment Shift'
+                            : scenarioKey.includes('fraud') || scenarioKey.includes('scam') || scenarioKey.includes('phish')
+                                ? 'Fraud/Scam'
+                                : null;
+
+        if (scenarioMatch && SCENARIO_STRATEGIES[scenarioMatch]) {
+            return SCENARIO_STRATEGIES[scenarioMatch].map(strategy => ({
+                title: strategy.action,
+                description: strategy.reasoning,
+                effectiveness: Math.round((strategy.effectiveness || 0) * 100),
+                icon: strategy.risk === 'critical' ? 'alert' : strategy.risk === 'high' ? 'zap' : 'shield'
+            }));
+        }
+
+        return [
+            { title: "Issue Official Statement", description: "Release transparent communication addressing concerns.", effectiveness: Math.floor(70 + Math.random() * 15), icon: "message" },
+            { title: "Activate Crisis Team", description: "Deploy dedicated response team for real-time monitoring.", effectiveness: Math.floor(65 + Math.random() * 15), icon: "users" },
+            { title: "Engage Key Influencers", description: "Coordinate with trusted voices to counter misinformation.", effectiveness: Math.floor(60 + Math.random() * 10), icon: "trending-down" }
+        ];
+    };
     const FALLBACK_STRATEGIES = getFallbackStrategies();
+
+    React.useEffect(() => {
+        let mounted = true;
+        api.getGuardrails()
+            .then((data) => {
+                if (mounted) setGuardrails(data.guardrails || null);
+            })
+            .catch(() => {
+                if (mounted) setGuardrails(null);
+            });
+        return () => { mounted = false; };
+    }, []);
 
     // Fetch AI recommendations - refetch every 5 signals (Issue 2)
     React.useEffect(() => {
@@ -425,16 +513,19 @@ function DecisionPanel() {
                     setAiStrategies(data.strategies);
                     setAiReasoning(data.ai_reasoning || "");
                     setIsAiGenerated(data.generated === true);
+                    setAiModel(data.model || null);
                 } else {
                     setAiStrategies(getFallbackStrategies());
                     setAiReasoning("Using default strategies.");
                     setIsAiGenerated(false);
+                    setAiModel(null);
                 }
             } catch (error) {
                 console.error("Failed to fetch AI recommendations:", error);
                 setAiStrategies(getFallbackStrategies());
                 setAiReasoning("AI service unavailable - using default strategies.");
                 setIsAiGenerated(false);
+                setAiModel(null);
             } finally {
                 setLoading(false);
             }
@@ -449,7 +540,9 @@ function DecisionPanel() {
         setSelectedStrategyIdx(0);
         setAiStrategies([]);
         setAiReasoning("");
+        setAiModel(null);
         lastFetchSignalCount.current = 0;
+        setEscalationStatus("idle");
     }, [activeScenarioName]);
 
     // Reset when simulation stops (Issue 4)
@@ -459,6 +552,7 @@ function DecisionPanel() {
             setAiStrategies([]);
             setAiReasoning("");
             setIsAiGenerated(false);
+            setAiModel(null);
             lastFetchSignalCount.current = 0;
         }
     }, [simulationStatus]);
@@ -472,6 +566,38 @@ function DecisionPanel() {
 
     const selectedStrategy = aiStrategies[selectedStrategyIdx] || FALLBACK_STRATEGIES[0];
 
+    const lowConfidenceThreshold = Math.round(((guardrails?.confidence_thresholds || [])
+        .find(t => t.id === 'low_confidence_escalation')?.threshold || 0.7) * 100);
+    const veryLowThreshold = Math.round(((guardrails?.confidence_thresholds || [])
+        .find(t => t.id === 'very_low_confidence_warning')?.threshold || 0.5) * 100);
+    const isLowConfidence = confidence > 0 && confidence < lowConfidenceThreshold;
+    const isVeryLowConfidence = confidence > 0 && confidence < veryLowThreshold;
+
+    const scenarioKey = activeScenario?.id || activeScenarioName || "unknown";
+    const hasEscalated = Boolean(escalatedScenarios[scenarioKey]);
+
+    const handleEscalate = async () => {
+        if (!scenarioKey || scenarioKey === "unknown") {
+            setEscalationStatus("failed");
+            return;
+        }
+        setEscalationStatus("loading");
+        try {
+            await api.recordDecision(
+                activeScenario?.id || scenarioKey,
+                "PENDING_REVIEW",
+                "dashboard-user",
+                `Escalated due to ${confidence}% confidence`,
+                activeScenarioName
+            );
+            setEscalatedScenarios(prev => ({ ...prev, [scenarioKey]: true }));
+            setEscalationStatus("done");
+        } catch (e) {
+            console.error("Failed to record escalation:", e);
+            setEscalationStatus("failed");
+        }
+    };
+
     const handleApprove = async () => {
         if (simulationStatus !== 'running') {
             alert('Please start the simulation first before deploying a strategy.');
@@ -480,7 +606,9 @@ function DecisionPanel() {
 
         try {
             if (useBackend && connected) {
-                await api.recordDecision("inc-001", "APPROVE", "user-1", selectedStrategy.title);
+                if (activeScenario?.id) {
+                    await api.recordDecision(activeScenario.id, "APPROVE", "dashboard-user", selectedStrategy.title, activeScenarioName);
+                }
             }
 
             // Convert effectiveness from percentage to decimal
@@ -519,7 +647,7 @@ function DecisionPanel() {
                         <CardTitle className="text-lg">AI Recommendation</CardTitle>
                         {isAiGenerated && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-mono">
-                                GPT-4o
+                                {aiModel || 'AI'}
                             </span>
                         )}
                         {simulationStatus === 'running' && (
@@ -568,6 +696,23 @@ function DecisionPanel() {
                             <Brain className="h-3 w-3" /> AI Analysis
                         </p>
                         <p className="text-xs text-muted-foreground">{aiReasoning}</p>
+                    </div>
+                )}
+
+                {isLowConfidence && status === 'pending' && (
+                    <div className={`p-3 rounded-md border ${isVeryLowConfidence ? 'border-destructive/50 bg-destructive/10' : 'border-amber-500/40 bg-amber-500/10'}`}>
+                        <p className="text-xs font-semibold text-amber-400 mb-1">Human review required</p>
+                        <p className="text-xs text-muted-foreground">
+                            Model confidence {confidence}% is below the {lowConfidenceThreshold}% threshold. Escalate for review before action.
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                            <Button size="sm" variant="outline" onClick={handleEscalate} disabled={hasEscalated || escalationStatus === 'loading'}>
+                                {escalationStatus === 'loading' ? 'Escalating...' : hasEscalated ? 'Escalated' : 'Escalate for Review'}
+                            </Button>
+                            {escalationStatus === 'failed' && (
+                                <span className="text-xs text-destructive">Failed to log escalation.</span>
+                            )}
+                        </div>
                     </div>
                 )}
 
@@ -648,6 +793,8 @@ import { api } from '../services/api';
 import { SignalFeed } from '../components/dashboard/SignalFeed';
 import { DebateViewer } from '../components/dashboard/DebateViewer';
 import { ExplainabilityPanel } from '../components/dashboard/ExplainabilityPanel';
+import { ExecutiveBriefingPanel } from '../components/dashboard/ExecutiveBriefingPanel';
+import { GovernanceAuditPanel } from '../components/dashboard/GovernanceAuditPanel';
 
 // Wrapper to conditionally show DebateViewer based on velocity
 // Once triggered, it stays visible for the rest of the simulation
@@ -703,6 +850,12 @@ export default function Dashboard() {
             <div className="grid gap-6 lg:grid-cols-2">
                 <DecisionPanel />
                 <ExplainabilityPanel />
+            </div>
+
+            {/* Third Row: Executive Briefing + Governance */}
+            <div className="grid gap-6 lg:grid-cols-2">
+                <ExecutiveBriefingPanel />
+                <GovernanceAuditPanel />
             </div>
 
             {/* Debate Viewer - appears when velocity exceeds threshold */}

@@ -131,12 +131,20 @@ export function SignalFeed() {
     // Stream signals continuously with mode-aware behavior
     // Re-run when simulationSpeed changes to apply new speed immediately
     useEffect(() => {
+        if (simulationStatus === 'complete') {
+            setIsStreaming(false);
+            if (injectionIntervalRef.current) {
+                clearTimeout(injectionIntervalRef.current);
+            }
+            return;
+        }
+
         if (datasetSignals.length > 0 && !loading) {
             setIsStreaming(true);
 
             const injectNextSignal = () => {
-                // Skip injection when paused
-                if (simulationStatus === 'paused') {
+                // Skip injection when paused or complete
+                if (simulationStatus === 'paused' || simulationStatus === 'complete') {
                     // Schedule retry after a short delay
                     injectionIntervalRef.current = setTimeout(injectNextSignal, 500);
                     return;

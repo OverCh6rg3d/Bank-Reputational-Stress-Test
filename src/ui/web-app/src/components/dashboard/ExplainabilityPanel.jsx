@@ -1,8 +1,9 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { Brain, ArrowRight, Activity, TrendingDown, Bot, Shield, Loader2 } from "lucide-react";
 import { useSimulation } from '@/context/SimulationContext';
+import { api } from '@/services/api';
 
 /**
  * AI Reasoning Engine - Shows REAL computed metrics from the simulation
@@ -15,13 +16,16 @@ import { useSimulation } from '@/context/SimulationContext';
  */
 
 export function ExplainabilityPanel() {
-    const { metrics, simulationStatus, activeScenarioName, liveSignals } = useSimulation();
+    const { metrics, simulationStatus, activeScenarioName } = useSimulation();
 
     const velocity = metrics?.velocity || 0;
     const confidence = metrics?.confidence || 0;
     const avgSentiment = metrics?.avgSentiment || 0;
     const signalCount = metrics?.signalCount || 0;
-    const alerts = metrics?.alerts || 0;
+
+    const [clusters, setClusters] = React.useState([]);
+    const [clusterLoading, setClusterLoading] = React.useState(false);
+    const [clusterError, setClusterError] = React.useState(null);
 
     // Compute real factors from simulation data
     const factors = [
@@ -132,6 +136,20 @@ export function ExplainabilityPanel() {
         }
     };
 
+    const runDetection = async () => {
+        setClusterLoading(true);
+        setClusterError(null);
+        try {
+            const result = await api.detectSignals();
+            setClusters((result.clusters || []).slice(0, 3));
+        } catch (e) {
+            setClusterError('Signal detection unavailable.');
+            setClusters([]);
+        } finally {
+            setClusterLoading(false);
+        }
+    };
+
     return (
         <Card className="bg-card/50 backdrop-blur h-full">
             <CardHeader className="pb-2">
@@ -183,6 +201,35 @@ export function ExplainabilityPanel() {
                     <p className="text-xs leading-relaxed opacity-80 font-mono">
                         {generateReasoning()}
                     </p>
+                </div>
+
+                <div className="mt-4 rounded-lg border border-border/50 p-3 bg-background/40">
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-muted-foreground">Signal Detection</p>
+                        <Button size="sm" variant="outline" onClick={runDetection} disabled={clusterLoading}>
+                            {clusterLoading ? 'Detecting...' : 'Run Detection'}
+                        </Button>
+                    </div>
+                    {clusterError && (
+                        <p className="text-xs text-destructive">{clusterError}</p>
+                    )}
+                    {!clusterError && clusters.length === 0 && !clusterLoading && (
+                        <p className="text-xs text-muted-foreground">No clusters loaded. Run detection to see clustered signals.</p>
+                    )}
+                    {clusters.length > 0 && (
+                        <ul className="text-xs text-muted-foreground space-y-2">
+                            {clusters.map((c) => (
+                                <li key={c.id} className="border border-border/40 rounded p-2">
+                                    <div className="flex justify-between">
+                                        <span className="font-medium text-foreground">{c.category} • {c.severity}</span>
+                                        <span>{Math.round((c.confidence || 0) * 100)}%</span>
+                                    </div>
+                                    <div className="text-[10px]">{c.summary}</div>
+                                    <div className="text-[10px] text-muted-foreground">Signals: {c.signal_count}</div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
             </CardContent>
         </Card>

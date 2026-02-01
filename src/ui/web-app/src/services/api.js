@@ -112,9 +112,44 @@ export const api = {
     },
 
     /**
+     * Generate executive briefing
+     */
+    async generateBriefing(scenarioName, scenarioId = null, context = null) {
+        const response = await fetch(`${API_BASE}/api/briefing/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                scenario_name: scenarioName,
+                scenario_id: scenarioId,
+                ...(context || {}),
+            })
+        });
+        if (!response.ok) throw new Error('Failed to generate briefing');
+        return response.json();
+    },
+
+    /**
+     * Get governance guardrails
+     */
+    async getGuardrails() {
+        const response = await fetch(`${API_BASE}/api/governance/guardrails`);
+        if (!response.ok) throw new Error('Failed to fetch guardrails');
+        return response.json();
+    },
+
+    /**
+     * Get audit log entries
+     */
+    async getAuditLog(limit = 50) {
+        const response = await fetch(`${API_BASE}/api/governance/audit?limit=${limit}`);
+        if (!response.ok) throw new Error('Failed to fetch audit log');
+        return response.json();
+    },
+
+    /**
      * Record governance decision
      */
-    async recordDecision(incidentId, decision, reviewerId, notes = '') {
+    async recordDecision(incidentId, decision, reviewerId, notes = '', scenarioName = null) {
         const response = await fetch(`${API_BASE}/api/governance/decision`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -123,6 +158,7 @@ export const api = {
                 decision,
                 reviewer_id: reviewerId,
                 notes,
+                scenario_name: scenarioName,
             }),
         });
         if (!response.ok) throw new Error('Failed to record decision');

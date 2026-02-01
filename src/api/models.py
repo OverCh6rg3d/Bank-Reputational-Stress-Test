@@ -43,6 +43,7 @@ class GovernanceDecisionRequest(BaseModel):
     decision: str  # "APPROVE", "REJECT", "ESCALATE"
     reviewer_id: str
     notes: Optional[str] = None
+    scenario_name: Optional[str] = None
 
 
 class GenerateRecommendationsRequest(BaseModel):

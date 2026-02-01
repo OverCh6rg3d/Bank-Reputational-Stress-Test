@@ -15,8 +15,8 @@ const formatSimTime = (startTime, hoursOffset) => {
     return `${month} ${day} ${hours}:00`;
 };
 
-// Simulation duration (72 hours = 3 days for realistic crisis lifecycle)
-const DURATION_HOURS = 72;
+// Default simulation duration (hours)
+const DEFAULT_DURATION_HOURS = 72;
 const TOTAL_POPULATION = 10000;
 
 // Scenario parameters matching backend engine.py severity_boost values
@@ -46,6 +46,30 @@ const SCENARIO_PARAMS = {
         peakVelocityTarget: 90,
         peakHour: 24
     },
+    "Fraud/Scam": {
+        severity: "HIGH",
+        severityBoost: 1.3,
+        baseTransmissionRate: 0.10,
+        initialVelocity: 20,
+        peakVelocityTarget: 80,
+        peakHour: 16
+    },
+    "Sentiment Shift": {
+        severity: "MEDIUM",
+        severityBoost: 0.95,
+        baseTransmissionRate: 0.05,
+        initialVelocity: 10,
+        peakVelocityTarget: 50,
+        peakHour: 20
+    },
+    "Service": {
+        severity: "MEDIUM",
+        severityBoost: 1.05,
+        baseTransmissionRate: 0.07,
+        initialVelocity: 14,
+        peakVelocityTarget: 60,
+        peakHour: 10
+    },
     "default": {
         severity: "MEDIUM",
         severityBoost: 1.0,
@@ -58,12 +82,16 @@ const SCENARIO_PARAMS = {
 
 // Get scenario params by name (matches partial names)
 const getScenarioParams = (scenarioName) => {
-    if (scenarioName.includes("Data Leak") || scenarioName.includes("Leak")) {
+    if (scenarioName.includes("Data Leak") || scenarioName.includes("Leak") || scenarioName.includes("Breach")) {
         return SCENARIO_PARAMS["Data Leak"];
-    } else if (scenarioName.includes("Outage")) {
+    } else if (scenarioName.includes("Outage") || scenarioName.includes("Down") || scenarioName.includes("ATM") || scenarioName.includes("Service")) {
         return SCENARIO_PARAMS["Outage"];
-    } else if (scenarioName.includes("Deepfake") || scenarioName.includes("Executive")) {
+    } else if (scenarioName.includes("Deepfake") || scenarioName.includes("Executive") || scenarioName.includes("Misinformation")) {
         return SCENARIO_PARAMS["Deepfake"];
+    } else if (scenarioName.includes("Fraud") || scenarioName.includes("Scam") || scenarioName.includes("Phishing") || scenarioName.includes("OTP") || scenarioName.includes("Exploit") || scenarioName.includes("Bot")) {
+        return SCENARIO_PARAMS["Fraud/Scam"];
+    } else if (scenarioName.includes("Sentiment") || scenarioName.includes("Fee") || scenarioName.includes("Competitor") || scenarioName.includes("Backlash") || scenarioName.includes("Service Meltdown")) {
+        return SCENARIO_PARAMS["Sentiment Shift"];
     }
     return SCENARIO_PARAMS["default"];
 };
@@ -100,6 +128,7 @@ export const SimulationProvider = ({ children }) => {
     const [simulationStatus, setSimulationStatus] = useState("idle"); // idle, running, paused, complete
     const [simulationSpeed, setSimulationSpeed] = useState(1);
     const [timeHorizon, setTimeHorizon] = useState(0);
+    const [durationHours, setDurationHours] = useState(DEFAULT_DURATION_HOURS);
 
     // Store the start time when simulation begins
     const [startTime, setStartTime] = useState(() => new Date());
@@ -156,6 +185,7 @@ export const SimulationProvider = ({ children }) => {
     const preSimulationSnapshot = useRef(null); // For resetting (Issue 7)
     const velocityRef = useRef(12); // Source of truth for velocity (shared between signals and timer)
     const timeHorizonRef = useRef(0); // Tracks current sim hour synchronously for logic
+    const durationHoursRef = useRef(DEFAULT_DURATION_HOURS);
     const wsRef = useRef(null);
     const signalInjectionRef = useRef(null);
     const criticalActiveRef = useRef(false);
@@ -170,6 +200,10 @@ export const SimulationProvider = ({ children }) => {
     useEffect(() => {
         activeScenarioNameRef.current = activeScenarioName;
     }, [activeScenarioName]);
+
+    useEffect(() => {
+        durationHoursRef.current = durationHours;
+    }, [durationHours]);
 
     const appendAlertEntries = useCallback((count, velocityValue, alertHour) => {
         if (count <= 0) {
@@ -198,6 +232,7 @@ export const SimulationProvider = ({ children }) => {
                     if (data.scenarios?.length > 0) {
                         setActiveScenario(data.scenarios[0]);
                         setActiveScenarioName(data.scenarios[0].name);
+                        setDurationHours(data.scenarios[0].duration_hours || DEFAULT_DURATION_HOURS);
                     }
                 })
                 .catch(err => {
@@ -335,6 +370,7 @@ export const SimulationProvider = ({ children }) => {
         const now = new Date();
         setStartTime(now);
         setTimeHorizon(0);
+        timeHorizonRef.current = 0;
         setVelocityHistory(generateHistoricalBaseline(now, activeScenarioName));
 
         const params = getScenarioParams(activeScenarioName);
@@ -398,6 +434,7 @@ export const SimulationProvider = ({ children }) => {
             setVelocityHistory(preSimulationSnapshot.current.velocityHistory);
             setLiveSignals(preSimulationSnapshot.current.liveSignals);
             setTimeHorizon(preSimulationSnapshot.current.timeHorizon);
+            timeHorizonRef.current = preSimulationSnapshot.current.timeHorizon || 0;
             preSimulationSnapshot.current = null; // Clear snapshot for next run
         } else {
             // Fallback to full reset if no snapshot
@@ -420,12 +457,7 @@ export const SimulationProvider = ({ children }) => {
         alertsCountRef.current = 0;
     }, [useBackend, resetSimulation, activeScenarioName]);
 
-    // Auto-reset when simulation completes (Issue 4 of Phase 12)
-    useEffect(() => {
-        if (simulationStatus === 'complete') {
-            stopSimulation();
-        }
-    }, [simulationStatus, stopSimulation]);
+    // Note: Do not auto-reset on completion. Keep results visible until user resets.
 
     const selectScenario = useCallback((scenarioNameOrId) => {
         const scenario = scenarios.find(
@@ -434,8 +466,10 @@ export const SimulationProvider = ({ children }) => {
         if (scenario) {
             setActiveScenario(scenario);
             setActiveScenarioName(scenario.name);
+            setDurationHours(scenario.duration_hours || DEFAULT_DURATION_HOURS);
         } else {
             setActiveScenarioName(scenarioNameOrId);
+            setDurationHours(DEFAULT_DURATION_HOURS);
         }
 
         // Update baseline when scenario changes (only if not running)
@@ -469,7 +503,7 @@ export const SimulationProvider = ({ children }) => {
 
             setTimeHorizon(prevTime => {
                 // If complete, stop updating
-                if (prevTime >= DURATION_HOURS) {
+                if (prevTime >= durationHoursRef.current) {
                     setSimulationStatus('complete');
                     return prevTime;
                 }
@@ -602,7 +636,7 @@ export const SimulationProvider = ({ children }) => {
             ]);
 
             // Auto-complete at 24 hours
-            if (newTime >= DURATION_HOURS) {
+            if (newTime >= durationHoursRef.current) {
                 setSimulationStatus('complete');
             }
 
@@ -616,8 +650,8 @@ export const SimulationProvider = ({ children }) => {
     // These signals drive the "live" feel and update metrics INCLUDING velocity
     // NOTE: Confidence is ONLY updated when simulation is running
     const injectSignal = useCallback((signal) => {
-        // Don't inject signals when simulation is paused (but allow during idle for baseline feed)
-        if (simulationStatus === 'paused') {
+        // Don't inject signals when simulation is paused or complete (but allow during idle for baseline feed)
+        if (simulationStatus === 'paused' || simulationStatus === 'complete') {
             return;
         }
 
@@ -653,20 +687,23 @@ export const SimulationProvider = ({ children }) => {
         // Update source of truth
         velocityRef.current = roundedVelocity;
 
-        // If running, DEFER updates to the main timer loop to ensure consistency
-        // The timer reading velocityRef.current will update Graph + Metrics simultaneously
-        if (simulationStatus === 'running') {
-            return;
-        }
-
-        // If NOT running (Idle/Paused), manually update UI so the feed feels alive
+        // Always update signal count and sentiment so the feed and metrics stay in sync
         setMetrics(prev => {
             const newSignalCount = (prev.signalCount || 0) + 1;
             const oldTotal = (prev.avgSentiment || 0) * (prev.signalCount || 0);
             const newAvgSentiment = (oldTotal + sentiment) / newSignalCount;
-            // In idle/paused, confidence should remain 0
-            const newConfidence = 0;
 
+            // If running, let the timer loop own velocity/confidence updates
+            if (simulationStatus === 'running') {
+                return {
+                    ...prev,
+                    signalCount: newSignalCount,
+                    avgSentiment: Math.round(newAvgSentiment * 100) / 100,
+                };
+            }
+
+            // If NOT running (Idle/Paused), manually update UI so the feed feels alive
+            const newConfidence = 0;
             return {
                 ...prev,
                 signalCount: newSignalCount,
@@ -677,19 +714,21 @@ export const SimulationProvider = ({ children }) => {
             };
         });
 
-        // Keep chart and card in sync by updating the latest chart point
-        setVelocityHistory(prev => {
-            if (!prev || prev.length === 0) {
-                return prev;
-            }
-            const lastIndex = prev.length - 1;
-            const lastPoint = prev[lastIndex];
-            const updatedPoint = {
-                ...lastPoint,
-                velocity: roundedVelocity,
-            };
-            return [...prev.slice(0, lastIndex), updatedPoint];
-        });
+        // Keep chart and card in sync by updating the latest chart point (only when not running)
+        if (simulationStatus !== 'running') {
+            setVelocityHistory(prev => {
+                if (!prev || prev.length === 0) {
+                    return prev;
+                }
+                const lastIndex = prev.length - 1;
+                const lastPoint = prev[lastIndex];
+                const updatedPoint = {
+                    ...lastPoint,
+                    velocity: roundedVelocity,
+                };
+                return [...prev.slice(0, lastIndex), updatedPoint];
+            });
+        }
 
         // Clear "new" flag after animation
         setTimeout(() => setCurrentSignal(null), 1500);
@@ -726,7 +765,7 @@ export const SimulationProvider = ({ children }) => {
                 activeScenario?.id,
                 activeScenarioName,
                 simulationSpeed,
-                24
+                durationHoursRef.current
             );
         } else {
             setSimulationStatus("running");
@@ -775,6 +814,7 @@ export const SimulationProvider = ({ children }) => {
         metrics,
         velocityHistory,
         timeHorizon,
+        durationHours,
         criticalAlerts,
 
         // Live signals

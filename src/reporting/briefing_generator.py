@@ -49,6 +49,7 @@ class BriefingGenerator:
         cluster: Optional[SignalCluster],
         simulation_result: Optional[ContagionResult],
         causal_analysis: Optional[CausalAttribution],
+        signal_context: Optional[str] = None,
     ) -> ExecutiveBriefing:
         """
         Generate a complete executive briefing.
@@ -59,7 +60,7 @@ class BriefingGenerator:
         risk_level = self._assess_risk_level(simulation_result, cluster)
         
         # Generate situation summary using LLM
-        summary = self._generate_summary(scenario, cluster, simulation_result)
+        summary = self._generate_summary(scenario, cluster, simulation_result, signal_context)
         
         # Generate trajectory prediction
         trajectory = self._generate_trajectory_prediction(simulation_result)
@@ -122,6 +123,7 @@ class BriefingGenerator:
         scenario: Scenario,
         cluster: Optional[SignalCluster],
         simulation: Optional[ContagionResult],
+        signal_context: Optional[str] = None,
     ) -> str:
         """Generate executive summary using LLM."""
         cluster_info = ""
@@ -143,15 +145,24 @@ SIMULATION RESULTS:
 - Total Shares: {simulation.total_shares}
 - Coordinated Attack: {'Yes' if simulation.is_coordinated_attack else 'No'}"""
 
+        signal_info = ""
+        if signal_context:
+            signal_info = f"""
+RECENT SIGNALS (synthetic):
+{signal_context}
+"""
+
         prompt = f"""Write a 2-3 sentence executive summary for this crisis situation:
 
 SCENARIO: {scenario.scenario_name}
 {scenario.description}
 {cluster_info}
 {simulation_info}
+{signal_info}
 
 Write in clear, direct executive language. Lead with the most important fact.
-Do not use technical jargon. Be specific about the risk level and timeline."""
+Do not use technical jargon. Be specific about the risk level and timeline.
+Do NOT recommend public statements or automated public actions; keep actions internal and human-approved."""
 
         try:
             summary = self.llm.complete(
@@ -205,6 +216,8 @@ Risk Level: {risk_level.value}
 
 Provide a recommended action and the reasoning behind it.
 The action should be specific, actionable, and proportionate to the risk.
+Do NOT recommend public statements or direct communication with regulators.
+Actions must stay internal and require human approval.
 
 Respond with JSON:
 {{

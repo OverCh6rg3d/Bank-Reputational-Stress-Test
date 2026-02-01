@@ -12,7 +12,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +28,7 @@ sys.path.insert(0, str(src_path))
 
 from backend.data.data_loader import get_data_loader
 from backend.models.schemas import (
+    ContagionResult,
     GovernanceDecisionRequest,
     HumanAction,
     Scenario,
@@ -40,6 +41,7 @@ from backend.core.signal_detector import SignalDetector, RAGFactChecker
 from backend.core.signal_generator import get_signal_generator, SignalGenerator
 from backend.core.causal_engine import CausalEngine
 from backend.core.governance import get_governance_gate
+from backend.core.llm_client import get_llm_client, SYSTEM_PROMPTS
 from simulator.engine import ContagionSimulator
 from reporting.briefing_generator import BriefingGenerator
 
@@ -93,6 +95,14 @@ def get_components():
         _governance = get_governance_gate()
     
     return _data_loader, _simulator, _detector, _causal_engine, _briefing_generator, _governance
+
+
+def get_governance_component():
+    """Initialize governance only (avoid heavy dependencies for guardrail endpoints)."""
+    global _governance
+    if _governance is None:
+        _governance = get_governance_gate()
+    return _governance
 
 
 # =============================================================================
@@ -514,7 +524,7 @@ async def websocket_simulation(websocket: WebSocket):
                     async for point in simulator.run_simulation(
                         scenario=scenario,
                         trigger_signals=signals,
-                        duration_hours=min(duration, 48),
+                        duration_hours=min(duration, 72),
                         speed_multiplier=speed,
                     ):
                         # Send each data point
@@ -562,10 +572,28 @@ async def websocket_simulation(websocket: WebSocket):
 # Governance Endpoints
 # =============================================================================
 
+class BriefingMetrics(BaseModel):
+    """Optional live metrics from the dashboard."""
+    velocity: Optional[float] = None
+    confidence: Optional[float] = None
+    time_to_critical: Optional[float] = None
+    total_shares: Optional[int] = None
+    reach_percent: Optional[float] = None
+    avg_sentiment: Optional[float] = None
+    signal_count: Optional[int] = None
+
+
+class BriefingRequest(BaseModel):
+    """Request to generate an executive briefing."""
+    scenario_name: Optional[str] = None
+    scenario_id: Optional[str] = None
+    metrics: Optional[BriefingMetrics] = None
+    recent_signals: list[str] = []
+
 @app.post("/api/governance/decision")
 async def record_decision(request: GovernanceDecisionRequest):
     """Record a human governance decision."""
-    *_, governance = get_components()
+    governance = get_governance_component()
     
     governance.log_decision(
         incident_id=request.incident_id,
@@ -580,7 +608,7 @@ async def record_decision(request: GovernanceDecisionRequest):
 @app.get("/api/governance/audit")
 async def get_audit_log(limit: int = Query(default=50, le=200)):
     """Get audit log entries."""
-    *_, governance = get_components()
+    governance = get_governance_component()
     
     entries = governance.get_audit_trail(limit=limit)
     
@@ -598,6 +626,69 @@ async def get_audit_log(limit: int = Query(default=50, le=200)):
     }
 
 
+@app.get("/api/governance/guardrails")
+async def get_guardrails():
+    """Return configured governance guardrails."""
+    governance = get_governance_component()
+    return {"guardrails": governance.guardrails}
+
+
+@app.post("/api/briefing/generate")
+async def generate_briefing(request: BriefingRequest):
+    """Generate an executive briefing for a scenario."""
+    data_loader, _, _, _, briefing_generator, _ = get_components()
+
+    scenario = None
+    if request.scenario_id:
+        try:
+            scenario = data_loader.get_scenario_by_id(UUID(request.scenario_id))
+        except Exception:
+            scenario = None
+    if not scenario and request.scenario_name:
+        scenario = data_loader.get_scenario_by_name(request.scenario_name)
+    if not scenario:
+        scenarios = data_loader.load_scenarios()
+        scenario = scenarios[0] if scenarios else None
+
+    if not scenario:
+        raise HTTPException(status_code=404, detail="No scenario found")
+
+    simulation_result = None
+    if request.metrics and request.metrics.velocity is not None:
+        simulation_result = ContagionResult(
+            simulation_id=uuid4(),
+            scenario_id=scenario.scenario_id,
+            started_at=datetime.now(),
+            ended_at=None,
+            duration_hours=scenario.simulation_duration_hours,
+            peak_velocity=request.metrics.velocity,
+            time_to_critical=request.metrics.time_to_critical,
+            final_reach_percentage=float(request.metrics.reach_percent or 0.0),
+            velocity_trajectory=[],
+            total_shares=int(request.metrics.total_shares or 0),
+            total_comments=0,
+            total_reports=0,
+            is_coordinated_attack=False,
+            attack_confidence=0.0,
+        )
+
+    signal_context = None
+    if request.recent_signals:
+        signal_context = "\n".join([f"- {s}" for s in request.recent_signals[:5]])
+
+    briefing = briefing_generator.generate(
+        scenario=scenario,
+        cluster=None,
+        simulation_result=simulation_result,
+        causal_analysis=None,
+        signal_context=signal_context,
+    )
+
+    return {
+        "briefing": briefing_generator.format_for_display(briefing)
+    }
+
+
 # =============================================================================
 # LangGraph Workflow Endpoints
 # =============================================================================
@@ -608,6 +699,155 @@ class WorkflowRequest(BaseModel):
     scenario_id: Optional[str] = None
     signal_limit: int = 100
     use_llm: bool = False
+
+
+class RecommendationRequest(BaseModel):
+    """Request to generate response strategies."""
+    scenario_name: str
+    velocity: float
+    sentiment: float
+    signal_count: int
+    recent_signals: list[str] = []
+
+
+def _fallback_strategies_for_scenario(scenario_name: str) -> list[dict]:
+    name = (scenario_name or "").lower()
+    if any(k in name for k in ["leak", "breach", "data"]):
+        return [
+            {
+                "title": "Issue security clarification",
+                "description": "Provide transparent internal clarification to reduce speculation while gathering facts.",
+                "effectiveness": 78,
+                "icon": "shield",
+            },
+            {
+                "title": "Launch internal investigation",
+                "description": "Initiate a formal review and prepare evidence-based updates for leadership.",
+                "effectiveness": 68,
+                "icon": "alert",
+            },
+            {
+                "title": "Engage third-party auditor",
+                "description": "Use independent validation to strengthen trust and reduce uncertainty.",
+                "effectiveness": 85,
+                "icon": "trending-down",
+            },
+        ]
+    if any(k in name for k in ["outage", "service", "down", "atm"]):
+        return [
+            {
+                "title": "Activate incident response",
+                "description": "Mobilize the crisis team and prepare internal status updates for leadership.",
+                "effectiveness": 72,
+                "icon": "users",
+            },
+            {
+                "title": "Prepare customer support surge",
+                "description": "Scale support readiness to address increased inquiries and reduce churn risk.",
+                "effectiveness": 64,
+                "icon": "message",
+            },
+            {
+                "title": "Coordinate recovery plan",
+                "description": "Align technical recovery milestones with leadership communications.",
+                "effectiveness": 76,
+                "icon": "zap",
+            },
+        ]
+    if any(k in name for k in ["deepfake", "executive", "misinformation", "rumor", "fraud", "scam"]):
+        return [
+            {
+                "title": "Prepare verification brief",
+                "description": "Compile evidence to validate authenticity and inform leadership action.",
+                "effectiveness": 74,
+                "icon": "shield",
+            },
+            {
+                "title": "Engage legal & risk review",
+                "description": "Assess regulatory exposure and prepare escalation options.",
+                "effectiveness": 66,
+                "icon": "alert",
+            },
+            {
+                "title": "Coordinate internal comms",
+                "description": "Ensure consistent internal guidance before any external action.",
+                "effectiveness": 70,
+                "icon": "message",
+            },
+        ]
+    return [
+        {
+            "title": "Issue internal situation brief",
+            "description": "Provide leadership with a concise summary of risk and next steps.",
+            "effectiveness": 70,
+            "icon": "message",
+        },
+        {
+            "title": "Activate monitoring protocol",
+            "description": "Increase monitoring cadence and prepare escalation pathways.",
+            "effectiveness": 65,
+            "icon": "users",
+        },
+        {
+            "title": "Engage verification workflow",
+            "description": "Validate claims and assess misinformation risk with evidence.",
+            "effectiveness": 68,
+            "icon": "trending-down",
+        },
+    ]
+
+
+@app.post("/api/recommendations/generate")
+async def generate_recommendations(request: RecommendationRequest):
+    """Generate AI response strategies for the dashboard."""
+    try:
+        llm = get_llm_client()
+        prompt = f"""Generate 3 response strategies for a bank crisis scenario.
+
+SCENARIO: {request.scenario_name}
+Velocity: {request.velocity}
+Average sentiment: {request.sentiment}
+Signal count: {request.signal_count}
+Recent signals: {request.recent_signals[:5]}
+
+Constraints:
+- Do NOT recommend public posting or automated public actions.
+- Always recommend human review before any action.
+- Keep strategies actionable and concise.
+
+Respond as JSON:
+{{
+  "ai_reasoning": "...",
+  "strategies": [
+    {{"title": "...", "description": "...", "effectiveness": 0-100, "icon": "shield|message|users|alert|zap|trending-down"}}
+  ]
+}}
+"""
+
+        result = llm.complete_json(
+            prompt=prompt,
+            system_prompt=SYSTEM_PROMPTS["response_generator"],
+            temperature=0.4,
+        )
+
+        strategies = result.get("strategies") if isinstance(result, dict) else None
+        if not strategies:
+            raise ValueError("Invalid LLM response")
+
+        return {
+            "strategies": strategies,
+            "ai_reasoning": result.get("ai_reasoning", "Generated strategies based on current signals."),
+            "generated": True,
+            "model": llm.model,
+        }
+    except Exception as e:
+        logger.warning(f"Recommendation generation failed: {e}")
+        return {
+            "strategies": _fallback_strategies_for_scenario(request.scenario_name),
+            "ai_reasoning": "AI service unavailable - using default strategies.",
+            "generated": False,
+            "model": None,
+        }
 
 
 @app.post("/api/workflow/run")
