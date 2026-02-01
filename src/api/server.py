@@ -1,10 +1,15 @@
 import asyncio
 import logging
+import os
 from typing import List, Optional
 from uuid import UUID, uuid4
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
+
+load_dotenv()
 
 # Import backend components
 from backend.data.data_loader import get_data_loader
@@ -22,9 +27,13 @@ from api.models import (
     GenerateSignalsRequest,
     RunDebateRequest,
     GovernanceDecisionRequest,
+    GenerateRecommendationsRequest,
     SimulationStateResponse,
     DebateResponse
 )
+
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -278,6 +287,92 @@ async def record_decision(request: GovernanceDecisionRequest):
         })
         
     return {"status": "success", "message": "Decision recorded on ledger"}
+
+
+@app.post("/api/recommendations/generate")
+async def generate_recommendations(request: GenerateRecommendationsRequest):
+    """
+    Generate AI-powered crisis response recommendations using GPT-4o.
+    These are context-aware based on current scenario and signal data.
+    """
+    try:
+        # Determine urgency level
+        if request.velocity >= 65:
+            urgency = "CRITICAL"
+        elif request.velocity >= 30:
+            urgency = "ELEVATED"
+        else:
+            urgency = "MONITORING"
+        
+        # Build context from recent signals
+        signals_context = ""
+        if request.recent_signals:
+            signals_context = "\n".join([f"- {s[:150]}..." if len(s) > 150 else f"- {s}" for s in request.recent_signals[:5]])
+        
+        prompt = f"""You are a crisis communications AI advisor for a major UAE bank facing a reputational crisis.
+
+CURRENT SITUATION:
+- Scenario: {request.scenario_name}
+- Viral Velocity: {request.velocity:.1f}% (Urgency: {urgency})
+- Average Sentiment: {request.sentiment:.2f} (-1 = very negative, +1 = positive)
+- Signals Analyzed: {request.signal_count}
+
+RECENT SOCIAL SIGNALS:
+{signals_context if signals_context else "No signals available yet."}
+
+Generate exactly 5 response strategies with VARYING effectiveness (some may be less effective). For each strategy, provide:
+1. A short action title (max 6 words)
+2. Expected effectiveness (10-95%) - MUST include some low effectiveness options
+3. One sentence explaining the approach
+
+Format your response as JSON:
+{{
+  "strategies": [
+    {{"title": "...", "description": "...", "effectiveness": 85, "icon": "shield"}},
+    {{"title": "...", "description": "...", "effectiveness": 70, "icon": "message"}},
+    {{"title": "...", "description": "...", "effectiveness": 55, "icon": "users"}},
+    {{"title": "...", "description": "...", "effectiveness": 35, "icon": "alert"}},
+    {{"title": "Do Nothing / Wait", "description": "Monitor without action - crisis may escalate.", "effectiveness": 12, "icon": "trending-down"}}
+  ],
+  "ai_reasoning": "Brief explanation of why these strategies were chosen based on the current signals and velocity."
+}}
+
+Consider urgency level when setting effectiveness - faster action = higher effectiveness potential.
+IMPORTANT: Always include a "do nothing/wait" option with 10-15% effectiveness to show the risk of inaction.
+Icons can be: shield, message, users, alert, zap, trending-down"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an expert crisis communications strategist. Always respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500,
+            response_format={"type": "json_object"}
+        )
+        
+        import json
+        result = json.loads(response.choices[0].message.content)
+        result["urgency"] = urgency
+        result["generated"] = True
+        
+        logger.info(f"Generated {len(result.get('strategies', []))} AI recommendations for {request.scenario_name}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error generating recommendations: {e}")
+        # Return fallback strategies on error
+        return {
+            "strategies": [
+                {"title": "Issue Official Statement", "description": "Release transparent communication addressing concerns.", "effectiveness": 75, "icon": "message"},
+                {"title": "Activate Crisis Team", "description": "Deploy dedicated response team for real-time monitoring.", "effectiveness": 70, "icon": "users"},
+                {"title": "Engage Key Influencers", "description": "Coordinate with trusted voices to counter misinformation.", "effectiveness": 65, "icon": "trending-down"}
+            ],
+            "ai_reasoning": "Fallback strategies provided due to temporary AI unavailability.",
+            "urgency": "ELEVATED",
+            "generated": False
+        }
 
 
 # --- Simulation WebSocket ---

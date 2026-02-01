@@ -107,11 +107,13 @@ export const SimulationProvider = ({ children }) => {
     // Risk Metrics
     const [metrics, setMetrics] = useState({
         velocity: 12,
-        confidence: 45,
+        confidence: 0, // Start at 0% before simulation
         alerts: 0,
         peak_velocity: 0,
         time_to_critical: null,
         total_shares: 0,
+        avgSentiment: 0,
+        signalCount: 0,
     });
 
     // Initial chart data with historical baseline
@@ -119,10 +121,11 @@ export const SimulationProvider = ({ children }) => {
         generateHistoricalBaseline(new Date(), "Data Leak Rumor")
     );
 
-    // WebSocket connection
-    const wsRef = useRef(null);
-    const [connected, setConnected] = useState(false);
-    const [useBackend, setUseBackend] = useState(true);
+    const [criticalAlerts, setCriticalAlerts] = useState([]);
+
+    // Live signals that drive the simulation
+    const [liveSignals, setLiveSignals] = useState([]);
+    const [currentSignal, setCurrentSignal] = useState(null);
 
     // Intervention state
     // targetDampening: the goal we're moving towards (set by strategy)
@@ -134,7 +137,12 @@ export const SimulationProvider = ({ children }) => {
     const [interventionMessage, setInterventionMessage] = useState(null);
     const [strategyDeployed, setStrategyDeployed] = useState(false);
 
-    // Simulation state ref for the model
+    // WebSocket connection state
+    const [connected, setConnected] = useState(false);
+    const [useBackend, setUseBackend] = useState(true);
+
+    // Create refs for state accessed inside closures (timer)
+    // simulationStateRef: internal model state (infected, reach, etc.)
     const simulationStateRef = useRef({
         exposedPopulation: 0.05,
         infectedCount: 0,
@@ -144,6 +152,42 @@ export const SimulationProvider = ({ children }) => {
         totalShares: 0,
         alertsTriggered: [],
     });
+
+    const preSimulationSnapshot = useRef(null); // For resetting (Issue 7)
+    const velocityRef = useRef(12); // Source of truth for velocity (shared between signals and timer)
+    const timeHorizonRef = useRef(0); // Tracks current sim hour synchronously for logic
+    const wsRef = useRef(null);
+    const signalInjectionRef = useRef(null);
+    const criticalActiveRef = useRef(false);
+    const startTimeRef = useRef(startTime);
+    const activeScenarioNameRef = useRef(activeScenarioName);
+    const alertsCountRef = useRef(0);
+
+    useEffect(() => {
+        startTimeRef.current = startTime;
+    }, [startTime]);
+
+    useEffect(() => {
+        activeScenarioNameRef.current = activeScenarioName;
+    }, [activeScenarioName]);
+
+    const appendAlertEntries = useCallback((count, velocityValue, alertHour) => {
+        if (count <= 0) {
+            return;
+        }
+        const scenarioName = activeScenarioNameRef.current || 'Current Scenario';
+        const alertTime = formatSimTime(startTimeRef.current || new Date(), alertHour ?? (timeHorizonRef.current || 0));
+        setCriticalAlerts(prev => [
+            ...prev,
+            ...Array.from({ length: count }).map(() => ({
+                id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                time: alertTime,
+                velocity: typeof velocityValue === 'number' ? Math.round(velocityValue * 10) / 10 : null,
+                scenario: scenarioName,
+                message: `Alert triggered in ${scenarioName}.`
+            }))
+        ]);
+    }, []);
 
     // Fetch scenarios on mount
     useEffect(() => {
@@ -171,11 +215,43 @@ export const SimulationProvider = ({ children }) => {
                 break;
 
             case 'simulation_update':
+                // Skip updates when simulation is paused
+                if (simulationStatus === 'paused') {
+                    return;
+                }
                 if (data.point) {
                     setVelocityHistory(prev => [...prev, data.point]);
                     setTimeHorizon(data.point.hour);
+                    timeHorizonRef.current = data.point.hour;
                 }
                 if (data.metrics) {
+                    const velocityValue = data.metrics.velocity;
+                    if (typeof velocityValue === 'number') {
+                        const isCritical = velocityValue > 80;
+                        if (isCritical && !criticalActiveRef.current) {
+                            const alertHour = data.point?.hour ?? timeHorizonRef.current ?? 0;
+                            const scenarioName = activeScenarioNameRef.current || 'Current Scenario';
+                            const alertTime = formatSimTime(startTimeRef.current || new Date(), alertHour);
+                            setCriticalAlerts(prev => [
+                                ...prev,
+                                {
+                                    id: `critical-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                                    time: alertTime,
+                                    velocity: Math.round(velocityValue * 10) / 10,
+                                    scenario: scenarioName,
+                                    message: `Critical velocity threshold breached in ${scenarioName}.`
+                                }
+                            ]);
+                        }
+                        criticalActiveRef.current = isCritical;
+                    }
+                    if (typeof data.metrics.alerts === 'number') {
+                        const nextCount = data.metrics.alerts;
+                        if (nextCount > alertsCountRef.current) {
+                            appendAlertEntries(nextCount - alertsCountRef.current, velocityValue, data.point?.hour);
+                        }
+                        alertsCountRef.current = nextCount;
+                    }
                     setMetrics(prev => ({
                         ...prev,
                         velocity: data.metrics.velocity || prev.velocity,
@@ -193,11 +269,15 @@ export const SimulationProvider = ({ children }) => {
                 if (data.metrics) {
                     setMetrics(prev => ({ ...prev, ...data.metrics }));
                 }
+                criticalActiveRef.current = false;
+                alertsCountRef.current = 0;
                 break;
 
             case 'error':
                 console.error('Simulation error:', data.message);
                 setSimulationStatus('idle');
+                criticalActiveRef.current = false;
+                alertsCountRef.current = 0;
                 break;
 
             case 'intervention':
@@ -260,12 +340,25 @@ export const SimulationProvider = ({ children }) => {
         const params = getScenarioParams(activeScenarioName);
         setMetrics({
             velocity: params.initialVelocity,
-            confidence: 45,
+            confidence: 0, // Start at 0% - builds as simulation runs
             alerts: 0,
             peak_velocity: 0,
             time_to_critical: null,
-            total_shares: 0
+            total_shares: 0,
+            avgSentiment: 0,
+            signalCount: 0,
         });
+
+        setCriticalAlerts([]);
+        criticalActiveRef.current = false;
+        alertsCountRef.current = 0;
+
+        // Reset live signals
+        setLiveSignals([]);
+        setCurrentSignal(null);
+        if (signalInjectionRef.current) {
+            clearInterval(signalInjectionRef.current);
+        }
 
         // Reset intervention state
         setTargetDampening(1.0);
@@ -284,15 +377,55 @@ export const SimulationProvider = ({ children }) => {
             totalShares: 0,
             alertsTriggered: [],
         };
+
+        // Reset velocity ref source of truth
+        velocityRef.current = params.initialVelocity;
     }, [activeScenarioName]);
 
+    // Stop simulation and restore pre-simulation state (Issue 7)
     const stopSimulation = useCallback(() => {
         if (useBackend && wsRef.current) {
             wsRef.current.stopSimulation();
         }
         setSimulationStatus("idle");
-        resetSimulation();
-    }, [useBackend, resetSimulation]);
+
+        // Restore pre-simulation snapshot if available (Issue 7)
+        if (preSimulationSnapshot.current) {
+            setMetrics({
+                ...preSimulationSnapshot.current.metrics,
+                confidence: 0, // Always reset confidence to 0 (Issue 6)
+            });
+            setVelocityHistory(preSimulationSnapshot.current.velocityHistory);
+            setLiveSignals(preSimulationSnapshot.current.liveSignals);
+            setTimeHorizon(preSimulationSnapshot.current.timeHorizon);
+            preSimulationSnapshot.current = null; // Clear snapshot for next run
+        } else {
+            // Fallback to full reset if no snapshot
+            resetSimulation();
+        }
+
+        // Reset intervention state
+        setTargetDampening(1.0);
+        setCurrentDampening(1.0);
+        setInterventionHour(null);
+        setInterventionMessage(null);
+        setStrategyDeployed(false);
+
+        // Reset velocity ref to ensure metric card resets
+        // The setMetrics call above might use a snapshot, but we want to be sure
+        const params = getScenarioParams(activeScenarioName);
+        velocityRef.current = params.initialVelocity;
+        setCriticalAlerts([]);
+        criticalActiveRef.current = false;
+        alertsCountRef.current = 0;
+    }, [useBackend, resetSimulation, activeScenarioName]);
+
+    // Auto-reset when simulation completes (Issue 4 of Phase 12)
+    useEffect(() => {
+        if (simulationStatus === 'complete') {
+            stopSimulation();
+        }
+    }, [simulationStatus, stopSimulation]);
 
     const selectScenario = useCallback((scenarioNameOrId) => {
         const scenario = scenarios.find(
@@ -313,6 +446,9 @@ export const SimulationProvider = ({ children }) => {
             setVelocityHistory(generateHistoricalBaseline(now, newName));
             const params = getScenarioParams(newName);
             setMetrics(prev => ({ ...prev, velocity: params.initialVelocity }));
+            setCriticalAlerts([]);
+            criticalActiveRef.current = false;
+            alertsCountRef.current = 0;
         }
     }, [scenarios, simulationStatus]);
 
@@ -324,142 +460,242 @@ export const SimulationProvider = ({ children }) => {
 
         const intervalMs = 1000 / simulationSpeed;
         const interval = setInterval(() => {
+            // Calculate new time based on current state
+            // We use the functional update just to get the prev value, but return it immediately
+            // Then do logic outside. Wait, we need the new time for logic.
+            // Better pattern: Use a timeRef if needed, or just trust the loop sequence.
+            // Actually, we can do the logic *inside* the interval callback using the ref for state,
+            // and functional update for time is fine, BUT we must move the side effects out.
+
             setTimeHorizon(prevTime => {
-                const newTime = prevTime + 1;
-                const state = simulationStateRef.current;
-
-                // === GRADUAL DAMPENING EFFECT ===
-                // Dampening moves gradually towards target over ~6-8 hours for 72h sim
-                let effectiveDampening = currentDampening;
-                if (targetDampening !== currentDampening) {
-                    const dampeningStep = 0.08; // Slower: 8% per hour (reaches target in ~8-10h)
-                    if (currentDampening > targetDampening) {
-                        effectiveDampening = Math.max(targetDampening, currentDampening - dampeningStep);
-                    } else {
-                        effectiveDampening = Math.min(targetDampening, currentDampening + dampeningStep);
-                    }
-                    setCurrentDampening(effectiveDampening);
+                // If complete, stop updating
+                if (prevTime >= DURATION_HOURS) {
+                    setSimulationStatus('complete');
+                    return prevTime;
                 }
+                return prevTime + 1;
+            });
 
-                // === TIMING BONUS: Earlier intervention = more effective ===
-                // Day 1 (0-24h): Early intervention bonus up to 25%
-                // Day 2 (24-48h): Neutral
-                // Day 3 (48-72h): Late intervention penalty up to 25%
-                let timingMultiplier = 1.0;
-                if (interventionHour !== null && strategyDeployed) {
-                    const hoursActive = newTime - interventionHour;
-                    // Bonus/penalty based on when intervention was applied
-                    const earlinessBonus = Math.max(-0.25, Math.min(0.25, (36 - interventionHour) / 144));
-                    // Effect builds up over time (full effect after 12 hours)
-                    const buildupFactor = Math.min(1, hoursActive / 12);
-                    timingMultiplier = 1 + (earlinessBonus * buildupFactor);
+            // NOW perform the physics and other updates based on the *expected* new time
+            // Since setTimeHorizon is async, we can't read 'timeHorizon' state immediately.
+            // But we know it will be prevTime + 1. 
+            // To imply synchronization, we should track internal time in a Ref for the physics engine.
+            const newTime = (timeHorizonRef.current || 0) + 1;
+            timeHorizonRef.current = newTime;
+
+            const state = simulationStateRef.current;
+            const scenarioParams = getScenarioParams(activeScenarioName);
+
+            // === GRADUAL DAMPENING EFFECT ===
+            // Dampening moves gradually towards target over ~6-8 hours for 72h sim
+            let effectiveDampening = currentDampening;
+            if (targetDampening !== currentDampening) {
+                const dampeningStep = 0.08; // Slower: 8% per hour (reaches target in ~8-10h)
+                if (currentDampening > targetDampening) {
+                    effectiveDampening = Math.max(targetDampening, currentDampening - dampeningStep);
+                } else {
+                    effectiveDampening = Math.min(targetDampening, currentDampening + dampeningStep);
                 }
+                setCurrentDampening(effectiveDampening);
+            }
 
-                // Apply timing bonus to dampening
-                const adjustedDampening = Math.max(0.1, effectiveDampening * timingMultiplier);
+            // === TIMING BONUS: Earlier intervention = more effective ===
+            let timingMultiplier = 1.0;
+            if (interventionHour !== null && strategyDeployed) {
+                const hoursActive = newTime - interventionHour;
+                const earlinessBonus = Math.max(-0.25, Math.min(0.25, (36 - interventionHour) / 144));
+                const buildupFactor = Math.min(1, hoursActive / 12);
+                timingMultiplier = 1 + (earlinessBonus * buildupFactor);
+            }
+            const adjustedDampening = Math.max(0.1, effectiveDampening * timingMultiplier);
 
-                // === CONTAGION MODEL (3-day crisis lifecycle) ===
-                // Phase 1 (0-24h): Rapid growth
-                // Phase 2 (24-48h): Peak and plateau
-                // Phase 3 (48-72h): Natural decay or sustained if not addressed
+            // === CONTAGION MODEL ===
+            const peakHour = scenarioParams.peakHour || 18;
+            const distanceFromPeak = Math.abs(newTime - peakHour);
+            const growthPhase = newTime <= peakHour ? 1 : 0.7;
+            const momentum = Math.max(0.15, growthPhase * Math.exp(-distanceFromPeak / 30));
 
-                // Momentum now follows a bell curve peaking around scenario's peakHour
-                const peakHour = scenarioParams.peakHour || 18;
-                const distanceFromPeak = Math.abs(newTime - peakHour);
-                const growthPhase = newTime <= peakHour ? 1 : 0.7; // Faster growth, slower decay
-                const momentum = Math.max(0.15, growthPhase * Math.exp(-distanceFromPeak / 30));
+            const effectiveTransmissionRate = scenarioParams.baseTransmissionRate * momentum * adjustedDampening;
+            const susceptible = 1 - state.exposedPopulation;
+            const newExposures = effectiveTransmissionRate * susceptible * state.exposedPopulation;
+            state.exposedPopulation = Math.min(0.95, state.exposedPopulation + newExposures);
 
-                const effectiveTransmissionRate = scenarioParams.baseTransmissionRate * momentum * adjustedDampening;
+            const newSharers = Math.floor(newExposures * TOTAL_POPULATION * 0.3);
+            state.infectedCount += newSharers;
+            state.totalShares += newSharers;
+            state.cumulativeReach += newSharers * (5 + Math.floor(Math.random() * 10));
 
-                // SIR-model: new_infections = β * S * I
-                const susceptible = 1 - state.exposedPopulation;
-                const newExposures = effectiveTransmissionRate * susceptible * state.exposedPopulation;
-                state.exposedPopulation = Math.min(0.95, state.exposedPopulation + newExposures);
+            // === VELOCITY CALCULATION ===
+            let currentSignalVelocity = velocityRef.current;
+            const baseVelocity = (newExposures * 1000);
+            const momentumBonus = momentum * scenarioParams.peakVelocityTarget * 0.3;
+            let modelVelocity = (baseVelocity * scenarioParams.severityBoost + momentumBonus);
+            modelVelocity = modelVelocity * adjustedDampening;
 
-                // Sharing behavior
-                const newSharers = Math.floor(newExposures * TOTAL_POPULATION * 0.3);
-                state.infectedCount += newSharers;
-                state.totalShares += newSharers;
-                state.cumulativeReach += newSharers * (5 + Math.floor(Math.random() * 10));
+            const blendedVelocity = Math.max(0, Math.min(100, currentSignalVelocity));
+            velocityRef.current = blendedVelocity;
+            state.peakVelocity = Math.max(state.peakVelocity, blendedVelocity);
 
-                // === VELOCITY CALCULATION (matches backend) ===
-                const baseVelocity = (newExposures * 1000);
-                const momentumBonus = momentum * scenarioParams.peakVelocityTarget * 0.3;
-                const infectedBonus = Math.min(20, state.infectedCount * 0.015);
+            if (blendedVelocity > 80 && state.timeToCritical === null) {
+                state.timeToCritical = newTime;
+            }
 
-                let velocity = (baseVelocity * scenarioParams.severityBoost + momentumBonus + infectedBonus);
+            // === METRICS & ALERTS ===
+            const dataPoints = newTime;
+            const velocityPenalty = Math.max(0, blendedVelocity * 0.5);
+            const chaosPenalty = Math.min(20, state.alertsTriggered.length * 5);
+            const dataBonus = Math.min(10, dataPoints * 0.5);
+            const baseConfidence = 95 - velocityPenalty - chaosPenalty + dataBonus;
+            const confidence = Math.max(5, Math.min(99, Math.round(baseConfidence)));
 
-                // Apply dampening to velocity growth (not instant - affects rate of change)
-                velocity = velocity * adjustedDampening;
+            if (blendedVelocity > 80 && !state.alertsTriggered.includes('critical')) state.alertsTriggered.push('critical');
+            else if (blendedVelocity > 50 && !state.alertsTriggered.includes('high')) state.alertsTriggered.push('high');
+            else if (blendedVelocity > 30 && !state.alertsTriggered.includes('elevated')) state.alertsTriggered.push('elevated');
 
-                // Ensure velocity doesn't go below a floor based on existing exposure
-                const exposureFloor = state.exposedPopulation * 15;
-                velocity = Math.max(exposureFloor, velocity);
+            // === ATOMIC UPDATE ===
+            // We update both Chart data and Metrics data in the same tick 
+            // using the EXACT same variables calculated above.
+            const finalVelocity = Math.round(blendedVelocity * 10) / 10;
 
-                // Add minimal noise
-                velocity += (Math.random() - 0.5) * 2;
-                velocity = Math.max(0, Math.min(100, velocity));
-
-                // Track peak
-                if (velocity > state.peakVelocity) {
-                    state.peakVelocity = velocity;
-                }
-
-                // Track time to critical
-                if (velocity > 80 && state.timeToCritical === null) {
-                    state.timeToCritical = newTime;
-                }
-
-                // === UPDATE CHART ===
-                setVelocityHistory(prev => [
+            const isCritical = finalVelocity > 80;
+            if (isCritical && !criticalActiveRef.current) {
+                const alertTime = formatSimTime(startTime, newTime);
+                setCriticalAlerts(prev => [
                     ...prev,
                     {
-                        time: formatSimTime(startTime, newTime),
-                        velocity: Math.round(velocity * 10) / 10,
-                        hour: newTime
+                        id: `critical-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                        time: alertTime,
+                        velocity: finalVelocity,
+                        scenario: activeScenarioName,
+                        message: `Critical velocity threshold breached in ${activeScenarioName}.`
                     }
                 ]);
+            }
+            criticalActiveRef.current = isCritical;
 
-                // === METRICS ===
-                const dataPoints = newTime;
-                const baseConfidence = 45 + Math.min(40, dataPoints * 2);
-                const confidence = Math.min(95, Math.round(baseConfidence));
+            const nextAlertsCount = state.alertsTriggered.length;
+            if (nextAlertsCount > alertsCountRef.current) {
+                appendAlertEntries(nextAlertsCount - alertsCountRef.current, finalVelocity, newTime);
+                alertsCountRef.current = nextAlertsCount;
+            }
 
-                // Alerts
-                if (velocity > 80 && !state.alertsTriggered.includes('critical')) {
-                    state.alertsTriggered.push('critical');
-                } else if (velocity > 50 && !state.alertsTriggered.includes('high')) {
-                    state.alertsTriggered.push('high');
-                } else if (velocity > 30 && !state.alertsTriggered.includes('elevated')) {
-                    state.alertsTriggered.push('elevated');
+            setMetrics(prev => ({
+                velocity: finalVelocity,
+                confidence: confidence,
+                peak_velocity: Math.max(prev.peak_velocity || 0, Math.round(state.peakVelocity * 10) / 10),
+                time_to_critical: state.timeToCritical,
+                total_shares: state.totalShares,
+                alerts: state.alertsTriggered.length,
+                reach: state.cumulativeReach,
+                exposedPercent: Math.round(state.exposedPopulation * 100),
+                avgSentiment: prev.avgSentiment || -0.5,
+                signalCount: (prev.signalCount || 0),
+            }));
+
+            setVelocityHistory(prev => [
+                ...prev,
+                {
+                    time: formatSimTime(startTime, newTime),
+                    velocity: finalVelocity,
+                    hour: newTime
                 }
+            ]);
 
-                setMetrics({
-                    velocity: Math.round(velocity * 10) / 10,
-                    confidence: confidence,
-                    peak_velocity: Math.round(state.peakVelocity * 10) / 10,
-                    time_to_critical: state.timeToCritical,
-                    total_shares: state.totalShares,
-                    alerts: state.alertsTriggered.length,
-                    reach: state.cumulativeReach,
-                    exposedPercent: Math.round(state.exposedPopulation * 100),
-                });
+            // Auto-complete at 24 hours
+            if (newTime >= DURATION_HOURS) {
+                setSimulationStatus('complete');
+            }
 
-                // Auto-complete at 24 hours but don't crash
-                if (newTime >= DURATION_HOURS) {
-                    setSimulationStatus('complete');
-                    return DURATION_HOURS; // Stop incrementing
-                }
-
-                return newTime;
-            });
         }, intervalMs);
 
         return () => clearInterval(interval);
     }, [useBackend, simulationStatus, simulationSpeed, startTime, activeScenarioName,
         targetDampening, currentDampening, interventionHour, strategyDeployed]);
 
-    // Start simulation
+    // Signal injection system - injects signals continuously
+    // These signals drive the "live" feel and update metrics INCLUDING velocity
+    // NOTE: Confidence is ONLY updated when simulation is running
+    const injectSignal = useCallback((signal) => {
+        // Don't inject signals when simulation is paused (but allow during idle for baseline feed)
+        if (simulationStatus === 'paused') {
+            return;
+        }
+
+        const signalWithMeta = {
+            ...signal,
+            id: `signal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date().toISOString(),
+            isNew: true,
+        };
+
+        setCurrentSignal(signalWithMeta);
+        setLiveSignals(prev => [signalWithMeta, ...prev].slice(0, 50)); // Keep last 50
+
+        // Compute velocity using Exponential Moving Average (EMA) for smooth transitions
+        const sentiment = signal.gt_sentiment || -0.5;
+        const virality = signal.gt_virality_potential || 30;
+
+        // Calculate velocity impact from signal
+        const viralityImpact = (virality / 100) * 2;
+        const sentimentImpact = Math.abs(Math.min(0, sentiment));
+        const signalImpact = viralityImpact * (1 + sentimentImpact * 0.5);
+
+        // Compute target velocity based on signal
+        const currentVelocity = velocityRef.current; // Use ref as source of truth
+        const signalTargetVelocity = Math.min(100, virality * 1.8 + signalImpact * 2);
+
+        // Use EMA for smooth velocity transitions (alpha = 0.15 for gradual change)
+        // Formula: newValue = alpha * target + (1 - alpha) * current
+        const alpha = 0.15; // Lower = smoother, higher = more responsive
+        const smoothedVelocity = alpha * signalTargetVelocity + (1 - alpha) * currentVelocity;
+        const roundedVelocity = Math.round(Math.max(5, smoothedVelocity) * 10) / 10;
+
+        // Update source of truth
+        velocityRef.current = roundedVelocity;
+
+        // If running, DEFER updates to the main timer loop to ensure consistency
+        // The timer reading velocityRef.current will update Graph + Metrics simultaneously
+        if (simulationStatus === 'running') {
+            return;
+        }
+
+        // If NOT running (Idle/Paused), manually update UI so the feed feels alive
+        setMetrics(prev => {
+            const newSignalCount = (prev.signalCount || 0) + 1;
+            const oldTotal = (prev.avgSentiment || 0) * (prev.signalCount || 0);
+            const newAvgSentiment = (oldTotal + sentiment) / newSignalCount;
+            // In idle/paused, confidence should remain 0
+            const newConfidence = 0;
+
+            return {
+                ...prev,
+                signalCount: newSignalCount,
+                avgSentiment: Math.round(newAvgSentiment * 100) / 100,
+                velocity: roundedVelocity,
+                peak_velocity: Math.max(prev.peak_velocity || 0, roundedVelocity),
+                confidence: newConfidence,
+            };
+        });
+
+        // Keep chart and card in sync by updating the latest chart point
+        setVelocityHistory(prev => {
+            if (!prev || prev.length === 0) {
+                return prev;
+            }
+            const lastIndex = prev.length - 1;
+            const lastPoint = prev[lastIndex];
+            const updatedPoint = {
+                ...lastPoint,
+                velocity: roundedVelocity,
+            };
+            return [...prev.slice(0, lastIndex), updatedPoint];
+        });
+
+        // Clear "new" flag after animation
+        setTimeout(() => setCurrentSignal(null), 1500);
+    }, [metrics.velocity, simulationStatus]);
+
+    // Start simulation - continues from current state (Issue 1)
     const runSimulation = useCallback(() => {
         // Handle resume from pause
         if (simulationStatus === 'paused' && !useBackend) {
@@ -467,8 +703,23 @@ export const SimulationProvider = ({ children }) => {
             return;
         }
 
-        // Full reset for new simulation
-        resetSimulation();
+        // Store pre-simulation snapshot for reset (Issue 7)
+        // Only store if we don't already have one (first run)
+        if (!preSimulationSnapshot.current) {
+            preSimulationSnapshot.current = {
+                metrics: { ...metrics },
+                velocityHistory: [...velocityHistory],
+                liveSignals: [...liveSignals],
+                timeHorizon: timeHorizon,
+            };
+        }
+
+        // Reset only intervention state, NOT metrics/velocity/signals (Issue 1)
+        setTargetDampening(1.0);
+        setCurrentDampening(1.0);
+        setInterventionHour(null);
+        setInterventionMessage(null);
+        setStrategyDeployed(false);
 
         if (useBackend && wsRef.current && connected) {
             wsRef.current.startSimulation(
@@ -480,7 +731,7 @@ export const SimulationProvider = ({ children }) => {
         } else {
             setSimulationStatus("running");
         }
-    }, [simulationStatus, useBackend, connected, activeScenario, activeScenarioName, simulationSpeed, resetSimulation]);
+    }, [simulationStatus, useBackend, connected, activeScenario, activeScenarioName, simulationSpeed, metrics, velocityHistory, liveSignals, timeHorizon]);
 
     // Apply intervention (called when user deploys strategy)
     const applyIntervention = useCallback((effectiveness) => {
@@ -524,6 +775,12 @@ export const SimulationProvider = ({ children }) => {
         metrics,
         velocityHistory,
         timeHorizon,
+        criticalAlerts,
+
+        // Live signals
+        liveSignals,
+        currentSignal,
+        injectSignal,
 
         // Connection state
         connected,

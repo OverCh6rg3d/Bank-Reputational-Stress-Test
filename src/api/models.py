@@ -45,6 +45,14 @@ class GovernanceDecisionRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class GenerateRecommendationsRequest(BaseModel):
+    scenario_name: str
+    velocity: float
+    sentiment: float
+    signal_count: int
+    recent_signals: List[str] = []  # Content snippets from recent signals
+
+
 # --- Response Models ---
 
 class SimulationStateResponse(BaseModel):
