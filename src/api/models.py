@@ -25,8 +25,9 @@ class StartSimulationRequest(BaseModel):
 
 
 class GenerateSignalsRequest(BaseModel):
-    scenario_id: UUID
-    count: int = 10
+    scenario_id: Optional[UUID] = None
+    scenario_name: Optional[str] = None
+    count_per_level: int = 15
     platform_distribution: Optional[Dict[str, float]] = None
 
 
@@ -42,6 +43,15 @@ class GovernanceDecisionRequest(BaseModel):
     decision: str  # "APPROVE", "REJECT", "ESCALATE"
     reviewer_id: str
     notes: Optional[str] = None
+    scenario_name: Optional[str] = None
+
+
+class GenerateRecommendationsRequest(BaseModel):
+    scenario_name: str
+    velocity: float
+    sentiment: float
+    signal_count: int
+    recent_signals: List[str] = []  # Content snippets from recent signals
 
 
 # --- Response Models ---

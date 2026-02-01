@@ -1,10 +1,17 @@
 import asyncio
 import logging
+import os
+from datetime import datetime
 from typing import List, Optional
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5, NAMESPACE_URL
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
+from pydantic import BaseModel
+
+load_dotenv()
 
 # Import backend components
 from backend.data.data_loader import get_data_loader
@@ -13,15 +20,41 @@ from signals.generator import SyntheticSignalGenerator
 from backend.core.debate import get_debate_engine, DebateResult
 from backend.core.signal_detector import SignalDetector
 from backend.core.causal_engine import CausalEngine
-from backend.models.schemas import Scenario, SocialSignal
+from backend.core.signal_detector import SignalDetector
+from backend.core.causal_engine import CausalEngine
+from backend.core.signal_generator import get_signal_generator, SignalGenerator
+from backend.models.schemas import Scenario, SocialSignal, ContagionResult
+from backend.core.governance import get_governance_gate
+from reporting.briefing_generator import BriefingGenerator
 from api.models import (
     StartSimulationRequest,
     GenerateSignalsRequest,
     RunDebateRequest,
     GovernanceDecisionRequest,
+    GenerateRecommendationsRequest,
     SimulationStateResponse,
     DebateResponse
 )
+
+
+class BriefingMetrics(BaseModel):
+    velocity: Optional[float] = None
+    confidence: Optional[float] = None
+    time_to_critical: Optional[float] = None
+    total_shares: Optional[int] = None
+    reach_percent: Optional[float] = None
+    avg_sentiment: Optional[float] = None
+    signal_count: Optional[int] = None
+
+
+class BriefingRequest(BaseModel):
+    scenario_name: Optional[str] = None
+    scenario_id: Optional[str] = None
+    metrics: Optional[BriefingMetrics] = None
+    recent_signals: List[str] = []
+
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,6 +86,8 @@ class GlobalState:
 
 state = GlobalState()
 data_loader = get_data_loader()
+governance_gate = get_governance_gate()
+briefing_generator = BriefingGenerator()
 
 # --- Connection Manager ---
 
@@ -74,13 +109,34 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+def _normalize_incident_id(raw_id: str) -> UUID:
+    try:
+        return UUID(str(raw_id))
+    except Exception:
+        return uuid5(NAMESPACE_URL, str(raw_id))
+
+
 # --- Endpoints ---
 
 @app.get("/api/scenarios")
 async def get_scenarios():
     """Get all available scenarios."""
     scenarios = data_loader.load_scenarios()
-    return [s.model_dump() for s in scenarios]
+    return {
+        "scenarios": [
+            {
+                "id": str(s.scenario_id),
+                "name": s.scenario_name,
+                "description": s.description,
+                "severity": s.severity_level.value,
+                "target_segment": s.target_segment,
+                "duration_hours": s.simulation_duration_hours,
+                "expected_velocity_peak": s.expected_velocity_peak,
+                "potential_impact": s.potential_impact,
+            }
+            for s in scenarios
+        ]
+    }
 
 
 @app.get("/api/scenarios/{scenario_id}")
@@ -89,7 +145,20 @@ async def get_scenario(scenario_id: UUID):
     scenario = data_loader.get_scenario_by_id(scenario_id)
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
-    return scenario.model_dump()
+    return {
+        "scenario": {
+            "id": str(scenario.scenario_id),
+            "name": scenario.scenario_name,
+            "description": scenario.description,
+            "severity": scenario.severity_level.value,
+            "target_segment": scenario.target_segment,
+            "duration_hours": scenario.simulation_duration_hours,
+            "expected_velocity_peak": scenario.expected_velocity_peak,
+            "key_narratives": scenario.key_narratives,
+            "monitoring_keywords": scenario.monitoring_keywords,
+            "potential_impact": scenario.potential_impact,
+        }
+    }
 
 
 @app.get("/api/agents")
@@ -139,6 +208,105 @@ async def detect_signals():
     }
 
 
+@app.get("/api/analysis/reasoning")
+async def get_ai_reasoning():
+    """
+    Get XAI reasoning trace and clusters for the dashboard.
+    Analyses the currently active signals in the simulation.
+    """
+    if not state.current_scenario:
+        return {
+            "classification": "Waiting for Scenario...",
+            "confidence": "Neutral",
+            "clusters": [],
+            "reasoning": "No active scenario selected. Please start a simulation."
+        }
+
+    # Use cached signals or generate fallback
+    signals_data = state.signal_cache
+    
+    # Reconstruct SocialSignal objects for the detector
+    signals = []
+    try:
+        if signals_data:
+            signals = [SocialSignal(**s) for s in signals_data]
+    except Exception as e:
+        logger.error(f"Error reconstructing signals: {e}")
+        
+    # If cache is empty/invalid, generate fresh sample for analysis
+    if not signals:
+         generator = SyntheticSignalGenerator()
+         signals = await generator.generate_signals(state.current_scenario, count=15)
+
+    # Run detection
+    detector = SignalDetector()
+    clusters = detector.detect_clusters(signals)
+    
+    # Generate simple reasoning text (mock LLM summary for speed, or real if easy)
+    # For now, we derive it from the top cluster
+    top_cluster_name = clusters[0].topic if clusters else "General Noise"
+    severity = clusters[0].severity if clusters else "low"
+    
+    reasoning_text = (
+        f"Detected {len(clusters)} distinct signal clusters. "
+        f"Primary concern identified as '{top_cluster_name}' with {severity} severity grading. "
+        f"Velocity analysis indicates rising traction among high-authority accounts."
+    )
+
+    return {
+        "classification": "Reputational Threat",
+        "confidence": "High" if len(signals) > 10 else "Moderate",
+        "clusters": [c.topic for c in clusters[:4]], # Return top 4 topics
+        "reasoning": reasoning_text
+    }
+
+
+
+@app.post("/api/signals/generate")
+async def generate_signals(request: GenerateSignalsRequest):
+    """
+    Generate LLM-powered signals for a scenario, organized by velocity level.
+    """
+    try:
+        generator = get_signal_generator()
+        signals = await generator.generate_all_levels(
+            scenario_name=request.scenario_name,
+            count_per_level=request.count_per_level
+        )
+        
+        return {
+            "success": True,
+            "scenario": request.scenario_name,
+            "signals": signals,
+            "counts": {
+                "low": len(signals.get("low", [])),
+                "medium": len(signals.get("medium", [])),
+                "high": len(signals.get("high", [])),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Signal generation failed: {e}")
+        # Return fallback signals on error
+        generator = get_signal_generator()
+        fallback = {
+            "low": generator._get_fallback_signals(request.scenario_name, "low", request.count_per_level),
+            "medium": generator._get_fallback_signals(request.scenario_name, "medium", request.count_per_level),
+            "high": generator._get_fallback_signals(request.scenario_name, "high", request.count_per_level),
+        }
+        return {
+            "success": True,
+            "scenario": request.scenario_name,
+            "signals": fallback,
+            "fallback": True,
+            "counts": {
+                "low": len(fallback["low"]),
+                "medium": len(fallback["medium"]),
+                "high": len(fallback["high"]),
+            }
+        }
+
+
+
 @app.post("/api/analysis/debate", response_model=DebateResponse)
 async def run_debate(request: RunDebateRequest):
     """Run an adversarial debate on a finding."""
@@ -165,6 +333,18 @@ async def record_decision(request: GovernanceDecisionRequest):
     """Log a human governance decision."""
     # In a real app, this would save to DB/Ledger
     logger.info(f"Decision recorded: {request.decision} by {request.reviewer_id}")
+
+    incident_uuid = _normalize_incident_id(request.incident_id)
+    scenario_name = request.scenario_name or (state.current_scenario.scenario_name if state.current_scenario else None)
+    governance_gate.log_decision(
+        incident_id=incident_uuid,
+        action_type=f"HUMAN_{request.decision.upper()}",
+        actor=request.reviewer_id,
+        details={
+            "notes": request.notes or "",
+            "scenario": scenario_name,
+        },
+    )
     
     # TRIGGER INTERVENTION IF APPROVED
     if request.decision.upper() == "APPROVE" and state.simulator and state.is_running:
@@ -176,6 +356,199 @@ async def record_decision(request: GovernanceDecisionRequest):
         })
         
     return {"status": "success", "message": "Decision recorded on ledger"}
+
+
+@app.get("/api/governance/guardrails")
+async def get_guardrails():
+    return {"guardrails": governance_gate.guardrails}
+
+
+@app.get("/api/governance/audit")
+async def get_audit_log(limit: int = 50):
+    entries = governance_gate.get_audit_trail(limit=limit)
+    return {
+        "entries": [
+            {
+                "timestamp": e.timestamp.isoformat(),
+                "action": e.action_type,
+                "actor": e.actor,
+                "target": str(e.target_id),
+                "details": e.details,
+            }
+            for e in entries
+        ]
+    }
+
+
+@app.post("/api/briefing/generate")
+async def generate_briefing(request: BriefingRequest):
+    scenario = None
+    if request.scenario_id:
+        try:
+            scenario = data_loader.get_scenario_by_id(UUID(request.scenario_id))
+        except Exception:
+            scenario = None
+    if not scenario and request.scenario_name:
+        scenario = data_loader.get_scenario_by_name(request.scenario_name)
+    if not scenario:
+        scenarios = data_loader.load_scenarios()
+        scenario = scenarios[0] if scenarios else None
+    if not scenario:
+        raise HTTPException(status_code=404, detail="No scenario found")
+
+    simulation_result = None
+    if request.metrics and request.metrics.velocity is not None:
+        simulation_result = ContagionResult(
+            simulation_id=uuid4(),
+            scenario_id=scenario.scenario_id,
+            started_at=datetime.now(),
+            ended_at=None,
+            duration_hours=scenario.simulation_duration_hours,
+            peak_velocity=request.metrics.velocity,
+            time_to_critical=request.metrics.time_to_critical,
+            final_reach_percentage=float(request.metrics.reach_percent or 0.0),
+            velocity_trajectory=[],
+            total_shares=int(request.metrics.total_shares or 0),
+            total_comments=0,
+            total_reports=0,
+            is_coordinated_attack=False,
+            attack_confidence=0.0,
+        )
+
+    signal_context = None
+    if request.recent_signals:
+        signal_context = "\n".join([f"- {s}" for s in request.recent_signals[:5]])
+
+    briefing = briefing_generator.generate(
+        scenario=scenario,
+        cluster=None,
+        simulation_result=simulation_result,
+        causal_analysis=None,
+        signal_context=signal_context,
+    )
+
+    return {
+        "briefing": briefing_generator.format_for_display(briefing)
+    }
+
+
+@app.post("/api/recommendations/generate")
+async def generate_recommendations(request: GenerateRecommendationsRequest):
+    """
+    Generate AI-powered crisis response recommendations using GPT-4o.
+    These are context-aware based on current scenario and signal data.
+    """
+    try:
+        # Determine urgency level
+        if request.velocity >= 65:
+            urgency = "CRITICAL"
+        elif request.velocity >= 30:
+            urgency = "ELEVATED"
+        else:
+            urgency = "MONITORING"
+        
+        # Build context from recent signals
+        signals_context = ""
+        if request.recent_signals:
+            signals_context = "\n".join([f"- {s[:150]}..." if len(s) > 150 else f"- {s}" for s in request.recent_signals[:5]])
+        
+        prompt = f"""You are a crisis communications AI advisor for a major UAE bank facing a reputational crisis.
+
+CURRENT SITUATION:
+- Scenario: {request.scenario_name}
+- Viral Velocity: {request.velocity:.1f}% (Urgency: {urgency})
+- Average Sentiment: {request.sentiment:.2f} (-1 = very negative, +1 = positive)
+- Signals Analyzed: {request.signal_count}
+
+RECENT SOCIAL SIGNALS:
+{signals_context if signals_context else "No signals available yet."}
+
+Generate exactly 5 response strategies with VARYING effectiveness (some may be less effective). For each strategy, provide:
+1. A short action title (max 6 words)
+2. Expected effectiveness (10-95%) - MUST include some low effectiveness options
+3. One sentence explaining the approach
+
+Format your response as JSON:
+{{
+  "strategies": [
+    {{"title": "...", "description": "...", "effectiveness": 85, "icon": "shield"}},
+    {{"title": "...", "description": "...", "effectiveness": 70, "icon": "message"}},
+    {{"title": "...", "description": "...", "effectiveness": 55, "icon": "users"}},
+    {{"title": "...", "description": "...", "effectiveness": 35, "icon": "alert"}},
+    {{"title": "Do Nothing / Wait", "description": "Monitor without action - crisis may escalate.", "effectiveness": 12, "icon": "trending-down"}}
+  ],
+  "ai_reasoning": "Brief explanation of why these strategies were chosen based on the current signals and velocity."
+}}
+
+Consider urgency level when setting effectiveness - faster action = higher effectiveness potential.
+IMPORTANT: Always include a "do nothing/wait" option with 10-15% effectiveness to show the risk of inaction.
+Icons can be: shield, message, users, alert, zap, trending-down"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are an expert crisis communications strategist. Always respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500,
+            response_format={"type": "json_object"}
+        )
+        
+        import json
+        result = json.loads(response.choices[0].message.content)
+
+        strategies = result.get("strategies", []) if isinstance(result, dict) else []
+        if strategies:
+            # Normalize effectiveness to int 10-95
+            normalized = []
+            for s in strategies:
+                eff = s.get("effectiveness", None)
+                try:
+                    if isinstance(eff, str) and eff.endswith("%"):
+                        eff = eff.replace("%", "")
+                    eff_val = int(float(eff))
+                except Exception:
+                    eff_val = 0
+                eff_val = max(10, min(95, eff_val)) if eff_val > 0 else eff_val
+                normalized.append({**s, "effectiveness": eff_val})
+
+            # If all effectiveness values are identical or missing, enforce variation
+            eff_values = [s.get("effectiveness") for s in normalized if isinstance(s.get("effectiveness"), int)]
+            all_same = len(set(eff_values)) <= 1 if eff_values else True
+            if all_same:
+                if urgency == "CRITICAL":
+                    spread = [90, 78, 64, 45, 15]
+                elif urgency == "ELEVATED":
+                    spread = [80, 68, 55, 40, 15]
+                else:
+                    spread = [70, 58, 45, 32, 15]
+                for idx, s in enumerate(normalized):
+                    s["effectiveness"] = spread[idx] if idx < len(spread) else max(10, 70 - idx * 8)
+
+            result["strategies"] = normalized
+
+        result["urgency"] = urgency
+        result["generated"] = True
+        result["model"] = "gpt-4o"
+        
+        logger.info(f"Generated {len(result.get('strategies', []))} AI recommendations for {request.scenario_name}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error generating recommendations: {e}")
+        # Return fallback strategies on error
+        return {
+            "strategies": [
+                {"title": "Issue Official Statement", "description": "Release transparent communication addressing concerns.", "effectiveness": 75, "icon": "message"},
+                {"title": "Activate Crisis Team", "description": "Deploy dedicated response team for real-time monitoring.", "effectiveness": 70, "icon": "users"},
+                {"title": "Engage Key Influencers", "description": "Coordinate with trusted voices to counter misinformation.", "effectiveness": 65, "icon": "trending-down"}
+            ],
+            "ai_reasoning": "Fallback strategies provided due to temporary AI unavailability.",
+            "urgency": "ELEVATED",
+            "generated": False,
+            "model": None
+        }
 
 
 # --- Simulation WebSocket ---

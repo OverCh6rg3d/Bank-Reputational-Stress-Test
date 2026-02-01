@@ -12,7 +12,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +28,7 @@ sys.path.insert(0, str(src_path))
 
 from backend.data.data_loader import get_data_loader
 from backend.models.schemas import (
+    ContagionResult,
     GovernanceDecisionRequest,
     HumanAction,
     Scenario,
@@ -37,8 +38,10 @@ from backend.models.schemas import (
     VelocityDataPoint,
 )
 from backend.core.signal_detector import SignalDetector, RAGFactChecker
+from backend.core.signal_generator import get_signal_generator, SignalGenerator
 from backend.core.causal_engine import CausalEngine
 from backend.core.governance import get_governance_gate
+from backend.core.llm_client import get_llm_client, SYSTEM_PROMPTS
 from simulator.engine import ContagionSimulator
 from reporting.briefing_generator import BriefingGenerator
 
@@ -59,7 +62,7 @@ app = FastAPI(
 # Add CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -92,6 +95,14 @@ def get_components():
         _governance = get_governance_gate()
     
     return _data_loader, _simulator, _detector, _causal_engine, _briefing_generator, _governance
+
+
+def get_governance_component():
+    """Initialize governance only (avoid heavy dependencies for guardrail endpoints)."""
+    global _governance
+    if _governance is None:
+        _governance = get_governance_gate()
+    return _governance
 
 
 # =============================================================================
@@ -179,17 +190,184 @@ async def list_signals(
             {
                 "id": str(s.signal_id),
                 "timestamp": s.timestamp.isoformat(),
-                "platform": s.platform_source.value,
-                "content": s.content_text[:300] + "..." if len(s.content_text) > 300 else s.content_text,
+                "platform_source": s.platform_source.value,
+                "content_text": s.content_text[:300] + "..." if len(s.content_text) > 300 else s.content_text,
                 "category": s.gt_category.value,
-                "sentiment": s.gt_sentiment,
-                "virality": s.gt_virality_potential,
+                "gt_sentiment": s.gt_sentiment,
+                "gt_virality_potential": s.gt_virality_potential,
+                "hashtags": s.hashtags,
             }
             for s in signals[:limit]
         ],
         "total": len(signals),
     }
 
+
+# Scenario-specific signal templates for dynamic generation
+SCENARIO_SIGNALS = {
+    "Data Leak": [
+        {"content": "My Mashreq account info might be compromised?? Friend just told me about a data breach 😰 #MashreqBank", "platform": "x_style", "virality": 75, "sentiment": -0.8},
+        {"content": "Anyone else get a suspicious email about Mashreq account verification? Worried it might be related to a leak", "platform": "x_style", "virality": 55, "sentiment": -0.6},
+        {"content": "r/UAE - Reports of unauthorized access to Mashreq accounts. Thread to track affected customers and bank response.", "platform": "reddit_style", "virality": 88, "sentiment": -0.9},
+        {"content": "Just changed all my Mashreq passwords. Better safe than sorry with these data leak rumors going around", "platform": "x_style", "virality": 42, "sentiment": -0.4},
+        {"content": "BREAKING: Potential customer data exposure at major UAE bank. Sources say thousands affected. #Banking #CyberSecurity", "platform": "news_portal", "virality": 92, "sentiment": -0.85},
+        {"content": "Called Mashreq support about the breach - 45 min wait time. Not reassuring at all 🙄", "platform": "x_style", "virality": 65, "sentiment": -0.7},
+        {"content": "Is it just me or is anyone else seeing strange transactions on their Mashreq statement? Getting worried here", "platform": "x_style", "virality": 70, "sentiment": -0.75},
+        {"content": "Tech expert here: If the Mashreq leak is real, they likely exposed hashed passwords at minimum. Change your credentials NOW.", "platform": "reddit_style", "virality": 82, "sentiment": -0.65},
+    ],
+    "Outage": [
+        {"content": "Mashreq app is DOWN again! Third time this week, seriously considering switching banks 😤 #MashreqDown", "platform": "x_style", "virality": 68, "sentiment": -0.75},
+        {"content": "Can't access my account. Is Mashreq having server issues today? Need to pay my rent urgently!", "platform": "x_style", "virality": 45, "sentiment": -0.5},
+        {"content": "Mashreq ATM network seems to be down across Dubai. Multiple branches affected. #ServiceOutage", "platform": "x_style", "virality": 72, "sentiment": -0.7},
+        {"content": "r/dubai - PSA: Mashreq online banking not working. Anyone know when it'll be back?", "platform": "reddit_style", "virality": 55, "sentiment": -0.55},
+        {"content": "Just got locked out of my Mashreq account during a transfer. Money stuck in limbo. Not happy.", "platform": "x_style", "virality": 78, "sentiment": -0.85},
+        {"content": "Major banking outage affecting UAE customers as Mashreq systems experience technical difficulties", "platform": "news_portal", "virality": 80, "sentiment": -0.6},
+    ],
+    "Deepfake": [
+        {"content": "WATCH: Video of Mashreq CEO admitting to fraud just leaked! Is this real?? 🤯 #MashreqScandal", "platform": "x_style", "virality": 95, "sentiment": -0.95},
+        {"content": "That Mashreq CEO video looks AI-generated to me. Check the weird lip sync at 0:47. Classic deepfake signs.", "platform": "reddit_style", "virality": 78, "sentiment": -0.3},
+        {"content": "Whether that video is real or not, the damage to Mashreq's reputation is already done. Stock plunging.", "platform": "x_style", "virality": 85, "sentiment": -0.8},
+        {"content": "Media experts analyzing viral Mashreq executive video for signs of AI manipulation", "platform": "news_portal", "virality": 88, "sentiment": -0.5},
+        {"content": "This deepfake technology is getting scary. If the Mashreq video is fake, how do we trust ANY video evidence now?", "platform": "x_style", "virality": 72, "sentiment": -0.6},
+        {"content": "URGENT: DO NOT SHARE the Mashreq CEO video until verified. Spreading potential misinformation helps no one.", "platform": "x_style", "virality": 65, "sentiment": -0.4},
+    ],
+}
+
+import random
+from datetime import timedelta
+
+@app.get("/api/signals/scenario/{scenario_name}")
+async def get_scenario_signals(
+    scenario_name: str,
+    limit: int = Query(default=10, le=50),
+    hour: int = Query(default=0, ge=0, le=72),
+):
+    """
+    Generate dynamic signals for a specific scenario.
+    
+    Signals become more frequent and viral as the hour increases (simulating crisis escalation).
+    """
+    # Find matching scenario template
+    scenario_key = None
+    for key in SCENARIO_SIGNALS.keys():
+        if key.lower() in scenario_name.lower():
+            scenario_key = key
+            break
+    
+    if not scenario_key:
+        scenario_key = "Data Leak"  # Default
+    
+    templates = SCENARIO_SIGNALS[scenario_key]
+    
+    # Generate signals based on current simulation hour
+    # More signals and higher virality in early crisis hours
+    crisis_intensity = min(1.0, 0.3 + (hour / 24) * 0.7) if hour <= 24 else max(0.3, 1.0 - ((hour - 24) / 48) * 0.5)
+    
+    generated = []
+    now = datetime.now()
+    
+    for i in range(min(limit, len(templates))):
+        template = templates[i % len(templates)]
+        
+        # Add time-based variation to virality
+        virality_boost = random.uniform(-10, 15) * crisis_intensity
+        final_virality = min(100, max(0, template["virality"] + virality_boost))
+        
+        # Add slight variation to sentiment
+        sentiment_var = random.uniform(-0.1, 0.1)
+        final_sentiment = max(-1, min(1, template["sentiment"] + sentiment_var))
+        
+        # Stagger timestamps
+        signal_time = now - timedelta(minutes=random.randint(0, 30) + i * 5)
+        
+        # Extract hashtags from content
+        import re
+        hashtags = re.findall(r'#(\w+)', template["content"])
+        
+        generated.append({
+            "id": f"gen-{scenario_key[:3]}-{hour}-{i}",
+            "timestamp": signal_time.isoformat(),
+            "platform_source": template["platform"],
+            "content_text": template["content"],
+            "gt_sentiment": round(final_sentiment, 2),
+            "gt_virality_potential": round(final_virality),
+            "hashtags": hashtags,
+            "category": scenario_key.lower().replace(" ", "_"),
+        })
+    
+    # Sort by virality (most viral first during crisis)
+    generated.sort(key=lambda x: x["gt_virality_potential"], reverse=True)
+    
+    return {
+        "signals": generated[:limit],
+        "scenario": scenario_key,
+        "hour": hour,
+        "intensity": round(crisis_intensity, 2),
+    }
+
+
+class GenerateSignalsRequest(BaseModel):
+    """Request body for LLM signal generation."""
+    scenario_name: str
+    count_per_level: int = 15
+
+
+@app.post("/api/signals/generate")
+async def generate_signals(request: GenerateSignalsRequest):
+    """
+    Generate LLM-powered signals for a scenario, organized by velocity level.
+    
+    This is the "pre-seeding" endpoint - call before starting simulation
+    to generate unique, scenario-specific signals in three intensity levels.
+    
+    Returns:
+        {
+            "low": [...],      # Confusion phase signals
+            "medium": [...],   # Frustration phase signals
+            "high": [...]      # Outrage phase signals
+        }
+    """
+    try:
+        generator = get_signal_generator()
+        signals = await generator.generate_all_levels(
+            scenario_name=request.scenario_name,
+            count_per_level=request.count_per_level
+        )
+        
+        return {
+            "success": True,
+            "scenario": request.scenario_name,
+            "signals": signals,
+            "counts": {
+                "low": len(signals.get("low", [])),
+                "medium": len(signals.get("medium", [])),
+                "high": len(signals.get("high", [])),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Signal generation failed: {e}")
+        # Return fallback signals on error
+        generator = get_signal_generator()
+        fallback = {
+            "low": generator._get_fallback_signals(request.scenario_name, "low", request.count_per_level),
+            "medium": generator._get_fallback_signals(request.scenario_name, "medium", request.count_per_level),
+            "high": generator._get_fallback_signals(request.scenario_name, "high", request.count_per_level),
+        }
+        return {
+            "success": True,
+            "scenario": request.scenario_name,
+            "signals": fallback,
+            "fallback": True,
+            "counts": {
+                "low": len(fallback["low"]),
+                "medium": len(fallback["medium"]),
+                "high": len(fallback["high"]),
+            }
+        }
+
+@app.get("/api/test_route")
+async def test_route():
+    return {"message": "I am working"}
 
 @app.get("/api/agents")
 async def list_agents(limit: int = Query(default=20, le=200)):
@@ -346,7 +524,7 @@ async def websocket_simulation(websocket: WebSocket):
                     async for point in simulator.run_simulation(
                         scenario=scenario,
                         trigger_signals=signals,
-                        duration_hours=min(duration, 48),
+                        duration_hours=min(duration, 72),
                         speed_multiplier=speed,
                     ):
                         # Send each data point
@@ -394,10 +572,28 @@ async def websocket_simulation(websocket: WebSocket):
 # Governance Endpoints
 # =============================================================================
 
+class BriefingMetrics(BaseModel):
+    """Optional live metrics from the dashboard."""
+    velocity: Optional[float] = None
+    confidence: Optional[float] = None
+    time_to_critical: Optional[float] = None
+    total_shares: Optional[int] = None
+    reach_percent: Optional[float] = None
+    avg_sentiment: Optional[float] = None
+    signal_count: Optional[int] = None
+
+
+class BriefingRequest(BaseModel):
+    """Request to generate an executive briefing."""
+    scenario_name: Optional[str] = None
+    scenario_id: Optional[str] = None
+    metrics: Optional[BriefingMetrics] = None
+    recent_signals: list[str] = []
+
 @app.post("/api/governance/decision")
 async def record_decision(request: GovernanceDecisionRequest):
     """Record a human governance decision."""
-    *_, governance = get_components()
+    governance = get_governance_component()
     
     governance.log_decision(
         incident_id=request.incident_id,
@@ -412,7 +608,7 @@ async def record_decision(request: GovernanceDecisionRequest):
 @app.get("/api/governance/audit")
 async def get_audit_log(limit: int = Query(default=50, le=200)):
     """Get audit log entries."""
-    *_, governance = get_components()
+    governance = get_governance_component()
     
     entries = governance.get_audit_trail(limit=limit)
     
@@ -430,6 +626,69 @@ async def get_audit_log(limit: int = Query(default=50, le=200)):
     }
 
 
+@app.get("/api/governance/guardrails")
+async def get_guardrails():
+    """Return configured governance guardrails."""
+    governance = get_governance_component()
+    return {"guardrails": governance.guardrails}
+
+
+@app.post("/api/briefing/generate")
+async def generate_briefing(request: BriefingRequest):
+    """Generate an executive briefing for a scenario."""
+    data_loader, _, _, _, briefing_generator, _ = get_components()
+
+    scenario = None
+    if request.scenario_id:
+        try:
+            scenario = data_loader.get_scenario_by_id(UUID(request.scenario_id))
+        except Exception:
+            scenario = None
+    if not scenario and request.scenario_name:
+        scenario = data_loader.get_scenario_by_name(request.scenario_name)
+    if not scenario:
+        scenarios = data_loader.load_scenarios()
+        scenario = scenarios[0] if scenarios else None
+
+    if not scenario:
+        raise HTTPException(status_code=404, detail="No scenario found")
+
+    simulation_result = None
+    if request.metrics and request.metrics.velocity is not None:
+        simulation_result = ContagionResult(
+            simulation_id=uuid4(),
+            scenario_id=scenario.scenario_id,
+            started_at=datetime.now(),
+            ended_at=None,
+            duration_hours=scenario.simulation_duration_hours,
+            peak_velocity=request.metrics.velocity,
+            time_to_critical=request.metrics.time_to_critical,
+            final_reach_percentage=float(request.metrics.reach_percent or 0.0),
+            velocity_trajectory=[],
+            total_shares=int(request.metrics.total_shares or 0),
+            total_comments=0,
+            total_reports=0,
+            is_coordinated_attack=False,
+            attack_confidence=0.0,
+        )
+
+    signal_context = None
+    if request.recent_signals:
+        signal_context = "\n".join([f"- {s}" for s in request.recent_signals[:5]])
+
+    briefing = briefing_generator.generate(
+        scenario=scenario,
+        cluster=None,
+        simulation_result=simulation_result,
+        causal_analysis=None,
+        signal_context=signal_context,
+    )
+
+    return {
+        "briefing": briefing_generator.format_for_display(briefing)
+    }
+
+
 # =============================================================================
 # LangGraph Workflow Endpoints
 # =============================================================================
@@ -440,6 +699,155 @@ class WorkflowRequest(BaseModel):
     scenario_id: Optional[str] = None
     signal_limit: int = 100
     use_llm: bool = False
+
+
+class RecommendationRequest(BaseModel):
+    """Request to generate response strategies."""
+    scenario_name: str
+    velocity: float
+    sentiment: float
+    signal_count: int
+    recent_signals: list[str] = []
+
+
+def _fallback_strategies_for_scenario(scenario_name: str) -> list[dict]:
+    name = (scenario_name or "").lower()
+    if any(k in name for k in ["leak", "breach", "data"]):
+        return [
+            {
+                "title": "Issue security clarification",
+                "description": "Provide transparent internal clarification to reduce speculation while gathering facts.",
+                "effectiveness": 78,
+                "icon": "shield",
+            },
+            {
+                "title": "Launch internal investigation",
+                "description": "Initiate a formal review and prepare evidence-based updates for leadership.",
+                "effectiveness": 68,
+                "icon": "alert",
+            },
+            {
+                "title": "Engage third-party auditor",
+                "description": "Use independent validation to strengthen trust and reduce uncertainty.",
+                "effectiveness": 85,
+                "icon": "trending-down",
+            },
+        ]
+    if any(k in name for k in ["outage", "service", "down", "atm"]):
+        return [
+            {
+                "title": "Activate incident response",
+                "description": "Mobilize the crisis team and prepare internal status updates for leadership.",
+                "effectiveness": 72,
+                "icon": "users",
+            },
+            {
+                "title": "Prepare customer support surge",
+                "description": "Scale support readiness to address increased inquiries and reduce churn risk.",
+                "effectiveness": 64,
+                "icon": "message",
+            },
+            {
+                "title": "Coordinate recovery plan",
+                "description": "Align technical recovery milestones with leadership communications.",
+                "effectiveness": 76,
+                "icon": "zap",
+            },
+        ]
+    if any(k in name for k in ["deepfake", "executive", "misinformation", "rumor", "fraud", "scam"]):
+        return [
+            {
+                "title": "Prepare verification brief",
+                "description": "Compile evidence to validate authenticity and inform leadership action.",
+                "effectiveness": 74,
+                "icon": "shield",
+            },
+            {
+                "title": "Engage legal & risk review",
+                "description": "Assess regulatory exposure and prepare escalation options.",
+                "effectiveness": 66,
+                "icon": "alert",
+            },
+            {
+                "title": "Coordinate internal comms",
+                "description": "Ensure consistent internal guidance before any external action.",
+                "effectiveness": 70,
+                "icon": "message",
+            },
+        ]
+    return [
+        {
+            "title": "Issue internal situation brief",
+            "description": "Provide leadership with a concise summary of risk and next steps.",
+            "effectiveness": 70,
+            "icon": "message",
+        },
+        {
+            "title": "Activate monitoring protocol",
+            "description": "Increase monitoring cadence and prepare escalation pathways.",
+            "effectiveness": 65,
+            "icon": "users",
+        },
+        {
+            "title": "Engage verification workflow",
+            "description": "Validate claims and assess misinformation risk with evidence.",
+            "effectiveness": 68,
+            "icon": "trending-down",
+        },
+    ]
+
+
+@app.post("/api/recommendations/generate")
+async def generate_recommendations(request: RecommendationRequest):
+    """Generate AI response strategies for the dashboard."""
+    try:
+        llm = get_llm_client()
+        prompt = f"""Generate 3 response strategies for a bank crisis scenario.
+
+SCENARIO: {request.scenario_name}
+Velocity: {request.velocity}
+Average sentiment: {request.sentiment}
+Signal count: {request.signal_count}
+Recent signals: {request.recent_signals[:5]}
+
+Constraints:
+- Do NOT recommend public posting or automated public actions.
+- Always recommend human review before any action.
+- Keep strategies actionable and concise.
+
+Respond as JSON:
+{{
+  "ai_reasoning": "...",
+  "strategies": [
+    {{"title": "...", "description": "...", "effectiveness": 0-100, "icon": "shield|message|users|alert|zap|trending-down"}}
+  ]
+}}
+"""
+
+        result = llm.complete_json(
+            prompt=prompt,
+            system_prompt=SYSTEM_PROMPTS["response_generator"],
+            temperature=0.4,
+        )
+
+        strategies = result.get("strategies") if isinstance(result, dict) else None
+        if not strategies:
+            raise ValueError("Invalid LLM response")
+
+        return {
+            "strategies": strategies,
+            "ai_reasoning": result.get("ai_reasoning", "Generated strategies based on current signals."),
+            "generated": True,
+            "model": llm.model,
+        }
+    except Exception as e:
+        logger.warning(f"Recommendation generation failed: {e}")
+        return {
+            "strategies": _fallback_strategies_for_scenario(request.scenario_name),
+            "ai_reasoning": "AI service unavailable - using default strategies.",
+            "generated": False,
+            "model": None,
+        }
 
 
 @app.post("/api/workflow/run")
@@ -763,5 +1171,6 @@ async def calibrate_confidence(confidence: float):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 

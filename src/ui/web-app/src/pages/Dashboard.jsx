@@ -1,8 +1,8 @@
 import React from 'react';
-import { SimulationProvider, useSimulation } from '../context/SimulationContext';
+import { useSimulation } from '../context/SimulationContext';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Activity, BrainCircuit, AlertTriangle, ShieldCheck, CheckCircle, Play, Pause, RotateCcw, Clock } from "lucide-react";
+import { Activity, BrainCircuit, AlertTriangle, ShieldCheck, CheckCircle, Play, Pause, RotateCcw, Clock, Brain, Shield, MessageSquare, Users, Zap, TrendingDown, Loader2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 // --- HEADER COMPONENT ---
@@ -17,17 +17,25 @@ function SimulationHeader() {
         simulationStatus,
         simulationSpeed,
         setSimulationSpeed,
-        timeHorizon
+        timeHorizon,
+        durationHours
     } = useSimulation();
 
-    const speedOptions = [0.5, 1, 2, 4];
+    const speedOptions = [1, 2, 4, 8, 16]; // Higher speeds for 72h simulation
     const isActive = simulationStatus === 'running' || simulationStatus === 'paused';
+
+    // Format time as Day X, HH:00 for better 72h readability
+    const formatTimeDisplay = (hours) => {
+        const day = Math.floor(hours / 24) + 1;
+        const hourOfDay = hours % 24;
+        return `Day ${day}, ${hourOfDay}h`;
+    };
 
     return (
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Crisis Simulator</h1>
-                <p className="text-muted-foreground mt-1">Predict the storm before it hits.</p>
+                <p className="text-muted-foreground mt-1">{durationHours}-hour stress test • Predict the storm before it hits.</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
                 {/* Time & Speed Controls (visible when running or paused) */}
@@ -35,7 +43,7 @@ function SimulationHeader() {
                     <>
                         <div className={`flex items-center gap-2 text-sm ${simulationStatus === 'running' ? 'text-amber-400 animate-pulse' : 'text-muted-foreground'}`}>
                             <Clock className="h-4 w-4" />
-                            <span className="font-mono">T+{timeHorizon}h</span>
+                            <span className="font-mono">{formatTimeDisplay(timeHorizon)}</span>
                             {simulationStatus === 'paused' && (
                                 <span className="text-xs bg-muted px-2 py-0.5 rounded">PAUSED</span>
                             )}
@@ -77,11 +85,13 @@ function SimulationHeader() {
                             <option>Data Leak Rumor</option>
                             <option>Service Outage</option>
                             <option>Executive Misconduct (Deepfake)</option>
+                            <option>Brand Sentiment Shift</option>
+                            <option>Fraud/Scam Rumors</option>
                         </>
                     )}
                 </select>
 
-                {/* Control Buttons */}
+                {/* Control Buttons based on status */}
                 {simulationStatus === 'idle' && (
                     <Button onClick={runSimulation}>
                         <Play className="mr-2 h-4 w-4 fill-current" /> Run Simulation
@@ -104,6 +114,18 @@ function SimulationHeader() {
                         </Button>
                         <Button onClick={stopSimulation} variant="outline" size="icon" title="Reset">
                             <RotateCcw className="h-4 w-4" />
+                        </Button>
+                    </>
+                )}
+                {simulationStatus === 'complete' && (
+                    <>
+                        <div className="flex items-center gap-2 text-sm text-green-400">
+                            <CheckCircle className="h-4 w-4" />
+                            <span className="font-mono">{formatTimeDisplay(timeHorizon)}</span>
+                            <span className="text-xs bg-green-500/20 px-2 py-0.5 rounded">COMPLETED</span>
+                        </div>
+                        <Button onClick={stopSimulation} variant="outline">
+                            <RotateCcw className="mr-2 h-4 w-4" /> Reset
                         </Button>
                     </>
                 )}
@@ -204,8 +226,29 @@ function VelocityChart() {
                             <Tooltip
                                 contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
                                 labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
+                                formatter={(value) => [`${value}`, 'Velocity']}
                             />
+                            {/* Critical threshold line */}
                             <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="5 5" label={{ value: "Critical", fill: '#ef4444', fontSize: 10, position: 'right' }} />
+
+                            {/* Day markers (vertical lines at 24h and 48h) */}
+                            {velocityHistory.some(p => p.hour >= 24) && (
+                                <ReferenceLine
+                                    x={velocityHistory.find(p => p.hour === 24)?.time}
+                                    stroke="#6366f1"
+                                    strokeDasharray="3 3"
+                                    label={{ value: "Day 2", fill: '#6366f1', fontSize: 10, position: 'top' }}
+                                />
+                            )}
+                            {velocityHistory.some(p => p.hour >= 48) && (
+                                <ReferenceLine
+                                    x={velocityHistory.find(p => p.hour === 48)?.time}
+                                    stroke="#8b5cf6"
+                                    strokeDasharray="3 3"
+                                    label={{ value: "Day 3", fill: '#8b5cf6', fontSize: 10, position: 'top' }}
+                                />
+                            )}
+
                             <Area type="monotone" dataKey="velocity" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorVelocity)" animationDuration={300} />
                         </AreaChart>
                     </ResponsiveContainer>
@@ -215,89 +258,530 @@ function VelocityChart() {
     );
 }
 
-// --- DECISION PANEL (AI Insight + Governance Combined) ---
-function DecisionPanel() {
-    const { activeScenarioName, simulationStatus, metrics } = useSimulation();
-    const [status, setStatus] = React.useState("pending");
+// --- STRATEGY OPTIONS PER SCENARIO TYPE ---
+// Each scenario includes a "Do Nothing" option to observe natural crisis trajectory
+const SCENARIO_STRATEGIES = {
+    "Data Leak": [
+        {
+            id: "do_nothing",
+            action: "Do Nothing - Monitor Situation",
+            reasoning: "Allow the situation to develop naturally while gathering more information. Risk: Crisis may escalate without intervention.",
+            effectiveness: 0, // No velocity reduction - crisis unfolds naturally
+            risk: "critical"
+        },
+        {
+            id: "transparency",
+            action: "Issue proactive security clarification",
+            reasoning: "Signal cluster indicates customer anxiety about data practices. Early transparency recommended.",
+            effectiveness: 0.7,
+            risk: "low"
+        },
+        {
+            id: "investigation",
+            action: "Launch internal investigation before public statement",
+            reasoning: "Gather facts first to avoid premature statements that may need correction.",
+            effectiveness: 0.4,
+            risk: "medium"
+        },
+        {
+            id: "third_party",
+            action: "Engage third-party security auditor for public verification",
+            reasoning: "External validation builds stronger trust than internal assurances.",
+            effectiveness: 0.85,
+            risk: "low"
+        }
+    ],
+    "Outage": [
+        {
+            id: "do_nothing",
+            action: "Do Nothing - Monitor Situation",
+            reasoning: "Allow the situation to develop naturally. Risk: Customer frustration may compound without communication.",
+            effectiveness: 0,
+            risk: "critical"
+        },
+        {
+            id: "status_updates",
+            action: "Post real-time status updates on official channels",
+            reasoning: "High volume of 'app down' mentions detected. Transparency reduces panic.",
+            effectiveness: 0.6,
+            risk: "low"
+        },
+        {
+            id: "compensation",
+            action: "Announce service credit compensation proactively",
+            reasoning: "Preemptive goodwill gesture can turn negative sentiment to positive.",
+            effectiveness: 0.75,
+            risk: "medium"
+        }
+    ],
+    "Deepfake": [
+        {
+            id: "do_nothing",
+            action: "Do Nothing - Monitor Situation",
+            reasoning: "Allow the situation to develop naturally. Risk: Misinformation may spread unchecked without response.",
+            effectiveness: 0,
+            risk: "critical"
+        },
+        {
+            id: "legal_denial",
+            action: "Prepare legal statement denying video authenticity",
+            reasoning: "Deepfake indicators detected. Swift denial critical for stock stability.",
+            effectiveness: 0.5,
+            risk: "medium"
+        },
+        {
+            id: "technical_proof",
+            action: "Release technical analysis proving video manipulation",
+            reasoning: "Forensic evidence is more convincing than verbal denial.",
+            effectiveness: 0.8,
+            risk: "low"
+        },
+        {
+            id: "executive_live",
+            action: "Schedule live executive appearance to contrast with fake",
+            reasoning: "Real-time presence counters deepfake narrative effectively.",
+            effectiveness: 0.9,
+            risk: "high"
+        }
+    ],
+    "Sentiment Shift": [
+        {
+            id: "do_nothing",
+            action: "Do Nothing - Monitor Trend",
+            reasoning: "Observe early signals before responding. Risk: sentiment could deteriorate further.",
+            effectiveness: 0,
+            risk: "medium"
+        },
+        {
+            id: "customer_listening",
+            action: "Increase customer listening and internal escalation",
+            reasoning: "Early sentiment drift suggests reputational risk; strengthen internal feedback loops.",
+            effectiveness: 0.55,
+            risk: "low"
+        },
+        {
+            id: "service_review",
+            action: "Review top complaint themes and prepare response options",
+            reasoning: "Identify drivers behind sentiment to prevent escalation.",
+            effectiveness: 0.65,
+            risk: "low"
+        }
+    ],
+    "Fraud/Scam": [
+        {
+            id: "do_nothing",
+            action: "Do Nothing - Monitor Rumors",
+            reasoning: "Wait for verification. Risk: scams may spread unchecked.",
+            effectiveness: 0,
+            risk: "critical"
+        },
+        {
+            id: "risk_intel",
+            action: "Activate fraud intelligence review",
+            reasoning: "Validate claims and coordinate with security teams.",
+            effectiveness: 0.7,
+            risk: "medium"
+        },
+        {
+            id: "internal_advisory",
+            action: "Prepare internal customer advisory content",
+            reasoning: "Ensure consistent guidance ready for human-approved release.",
+            effectiveness: 0.75,
+            risk: "low"
+        }
+    ]
+};
 
-    // Reset status when scenario changes or simulation restarts
+// --- DECISION PANEL (AI-Powered Recommendations) ---
+function DecisionPanel() {
+    const {
+        activeScenarioName,
+        activeScenario,
+        simulationStatus,
+        metrics,
+        applyIntervention,
+        interventionMessage,
+        strategyDeployed,
+        interventionHour,
+        connected,
+        useBackend,
+        liveSignals
+    } = useSimulation();
+
+    const [status, setStatus] = React.useState("pending"); // pending, approved
+    const [selectedStrategyIdx, setSelectedStrategyIdx] = React.useState(0);
+    const [aiStrategies, setAiStrategies] = React.useState([]);
+    const [aiReasoning, setAiReasoning] = React.useState("");
+    const [loading, setLoading] = React.useState(false);
+    const [isAiGenerated, setIsAiGenerated] = React.useState(false);
+    const [aiModel, setAiModel] = React.useState(null);
+    const [guardrails, setGuardrails] = React.useState(null);
+    const [escalationStatus, setEscalationStatus] = React.useState("idle");
+    const [escalatedScenarios, setEscalatedScenarios] = React.useState({});
+    const lastFetchSignalCount = React.useRef(0); // Track last fetch point (Issue 2)
+
+    const velocity = metrics?.velocity || 0;
+    const confidence = metrics?.confidence || 0;
+    const signalCount = metrics?.signalCount || 0;
+    const avgSentiment = metrics?.avgSentiment || 0;
+
+    // Get urgency level based on current velocity
+    const getUrgency = () => {
+        if (velocity >= 65) return { level: 'CRITICAL', color: 'text-red-400', bg: 'bg-red-500/20' };
+        if (velocity >= 30) return { level: 'ELEVATED', color: 'text-amber-400', bg: 'bg-amber-500/20' };
+        return { level: 'MONITORING', color: 'text-green-400', bg: 'bg-green-500/20' };
+    };
+    const urgency = getUrgency();
+
+    // Fallback strategies if API fails with dynamic effectiveness
+    const getFallbackStrategies = () => {
+        const scenarioKey = (activeScenarioName || '').toLowerCase();
+        const scenarioMatch =
+            scenarioKey.includes('leak') || scenarioKey.includes('breach') || scenarioKey.includes('data')
+                ? 'Data Leak'
+                : scenarioKey.includes('outage') || scenarioKey.includes('service') || scenarioKey.includes('atm')
+                    ? 'Outage'
+                    : scenarioKey.includes('deepfake') || scenarioKey.includes('executive')
+                        ? 'Deepfake'
+                        : scenarioKey.includes('sentiment') || scenarioKey.includes('brand')
+                            ? 'Sentiment Shift'
+                            : scenarioKey.includes('fraud') || scenarioKey.includes('scam') || scenarioKey.includes('phish')
+                                ? 'Fraud/Scam'
+                                : null;
+
+        if (scenarioMatch && SCENARIO_STRATEGIES[scenarioMatch]) {
+            return SCENARIO_STRATEGIES[scenarioMatch].map(strategy => ({
+                title: strategy.action,
+                description: strategy.reasoning,
+                effectiveness: Math.round((strategy.effectiveness || 0) * 100),
+                icon: strategy.risk === 'critical' ? 'alert' : strategy.risk === 'high' ? 'zap' : 'shield'
+            }));
+        }
+
+        return [
+            { title: "Issue Official Statement", description: "Release transparent communication addressing concerns.", effectiveness: Math.floor(70 + Math.random() * 15), icon: "message" },
+            { title: "Activate Crisis Team", description: "Deploy dedicated response team for real-time monitoring.", effectiveness: Math.floor(65 + Math.random() * 15), icon: "users" },
+            { title: "Engage Key Influencers", description: "Coordinate with trusted voices to counter misinformation.", effectiveness: Math.floor(60 + Math.random() * 10), icon: "trending-down" }
+        ];
+    };
+    const FALLBACK_STRATEGIES = getFallbackStrategies();
+
+    React.useEffect(() => {
+        let mounted = true;
+        api.getGuardrails()
+            .then((data) => {
+                if (mounted) setGuardrails(data.guardrails || null);
+            })
+            .catch(() => {
+                if (mounted) setGuardrails(null);
+            });
+        return () => { mounted = false; };
+    }, []);
+
+    // Fetch AI recommendations - refetch every 5 signals (Issue 2)
+    React.useEffect(() => {
+        const fetchRecommendations = async () => {
+            if (simulationStatus !== 'running') return;
+            if (signalCount < 3) return; // Wait for initial signals
+
+            // Only refetch every 10 signals after first fetch (User Request)
+            const shouldFetch = lastFetchSignalCount.current === 0 ||
+                (signalCount - lastFetchSignalCount.current >= 10);
+            if (!shouldFetch) return;
+
+            setLoading(true);
+            lastFetchSignalCount.current = signalCount;
+
+            try {
+                const recentSignalTexts = liveSignals.slice(0, 5).map(s => s.content_text || '');
+
+                const response = await fetch('http://localhost:8000/api/recommendations/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        scenario_name: activeScenarioName,
+                        velocity: velocity,
+                        sentiment: avgSentiment,
+                        signal_count: signalCount,
+                        recent_signals: recentSignalTexts
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.strategies && data.strategies.length > 0) {
+                    setAiStrategies(data.strategies);
+                    setAiReasoning(data.ai_reasoning || "");
+                    setIsAiGenerated(data.generated === true);
+                    setAiModel(data.model || null);
+                } else {
+                    setAiStrategies(getFallbackStrategies());
+                    setAiReasoning("Using default strategies.");
+                    setIsAiGenerated(false);
+                    setAiModel(null);
+                }
+            } catch (error) {
+                console.error("Failed to fetch AI recommendations:", error);
+                setAiStrategies(getFallbackStrategies());
+                setAiReasoning("AI service unavailable - using default strategies.");
+                setIsAiGenerated(false);
+                setAiModel(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRecommendations();
+    }, [simulationStatus, signalCount, activeScenarioName, velocity, avgSentiment, liveSignals]);
+
+    // Reset when scenario changes
     React.useEffect(() => {
         setStatus("pending");
-    }, [activeScenarioName, simulationStatus]);
+        setSelectedStrategyIdx(0);
+        setAiStrategies([]);
+        setAiReasoning("");
+        setAiModel(null);
+        lastFetchSignalCount.current = 0;
+        setEscalationStatus("idle");
+    }, [activeScenarioName]);
 
-    const getRecommendation = () => {
-        if (activeScenarioName.includes("Data Leak")) {
-            return {
-                action: "Issue proactive security clarification",
-                reasoning: "Signal cluster indicates customer anxiety about data practices. Early transparency recommended."
-            };
-        } else if (activeScenarioName.includes("Outage")) {
-            return {
-                action: "Post real-time status updates on official channels.",
-                reasoning: "High volume of 'app down' mentions detected. Transparency reduces panic."
-            };
-        } else {
-            return {
-                action: "Prepare legal statement denying video authenticity.",
-                reasoning: "Deepfake indicators detected. Swift denial critical for stock stability."
-            };
+    // Reset when simulation stops (Issue 4)
+    React.useEffect(() => {
+        if (simulationStatus === 'idle') {
+            setStatus("pending");
+            setAiStrategies([]);
+            setAiReasoning("");
+            setIsAiGenerated(false);
+            setAiModel(null);
+            lastFetchSignalCount.current = 0;
+        }
+    }, [simulationStatus]);
+
+    // Sync with context strategyDeployed state
+    React.useEffect(() => {
+        if (strategyDeployed && status === 'pending') {
+            setStatus('approved');
+        }
+    }, [strategyDeployed]);
+
+    const selectedStrategy = aiStrategies[selectedStrategyIdx] || FALLBACK_STRATEGIES[0];
+
+    const lowConfidenceThreshold = Math.round(((guardrails?.confidence_thresholds || [])
+        .find(t => t.id === 'low_confidence_escalation')?.threshold || 0.7) * 100);
+    const veryLowThreshold = Math.round(((guardrails?.confidence_thresholds || [])
+        .find(t => t.id === 'very_low_confidence_warning')?.threshold || 0.5) * 100);
+    const isLowConfidence = confidence > 0 && confidence < lowConfidenceThreshold;
+    const isVeryLowConfidence = confidence > 0 && confidence < veryLowThreshold;
+
+    const scenarioKey = activeScenario?.id || activeScenarioName || "unknown";
+    const hasEscalated = Boolean(escalatedScenarios[scenarioKey]);
+
+    const handleEscalate = async () => {
+        if (!scenarioKey || scenarioKey === "unknown") {
+            setEscalationStatus("failed");
+            return;
+        }
+        setEscalationStatus("loading");
+        try {
+            await api.recordDecision(
+                activeScenario?.id || scenarioKey,
+                "PENDING_REVIEW",
+                "dashboard-user",
+                `Escalated due to ${confidence}% confidence`,
+                activeScenarioName
+            );
+            setEscalatedScenarios(prev => ({ ...prev, [scenarioKey]: true }));
+            setEscalationStatus("done");
+        } catch (e) {
+            console.error("Failed to record escalation:", e);
+            setEscalationStatus("failed");
         }
     };
 
-    const rec = getRecommendation();
-
     const handleApprove = async () => {
+        if (simulationStatus !== 'running') {
+            alert('Please start the simulation first before deploying a strategy.');
+            return;
+        }
+
         try {
-            await api.recordDecision("inc-001", "APPROVE", "user-1", rec.action);
-            setStatus('approved');
+            if (useBackend && connected) {
+                if (activeScenario?.id) {
+                    await api.recordDecision(activeScenario.id, "APPROVE", "dashboard-user", selectedStrategy.title, activeScenarioName);
+                }
+            }
+
+            // Convert effectiveness from percentage to decimal
+            const effDecimal = (selectedStrategy.effectiveness || 70) / 100;
+            const success = applyIntervention(effDecimal);
+            if (success) {
+                setStatus('approved');
+            }
         } catch (e) {
             console.error("Failed to record decision:", e);
+            const effDecimal = (selectedStrategy.effectiveness || 70) / 100;
+            const success = applyIntervention(effDecimal);
+            if (success) {
+                setStatus('approved');
+            }
+        }
+    };
+
+    const getIconComponent = (iconName) => {
+        switch (iconName) {
+            case 'shield': return Shield;
+            case 'message': return MessageSquare;
+            case 'users': return Users;
+            case 'alert': return AlertTriangle;
+            case 'zap': return Zap;
+            case 'trending-down': return TrendingDown;
+            default: return Shield;
         }
     };
 
     return (
-        <Card className={`bg-card/50 backdrop-blur border-l-4 ${status === 'approved' ? 'border-l-green-500' :
-            status === 'rejected' ? 'border-l-destructive' : 'border-l-purple-500'
-            }`}>
+        <Card className={`bg-card/50 backdrop-blur border-l-4 h-full ${status === 'approved' ? 'border-l-green-500' : 'border-l-purple-500'}`}>
             <CardHeader>
                 <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">AI Recommendation</CardTitle>
-                    <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">
-                        {metrics.confidence}% confidence
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">AI Recommendation</CardTitle>
+                        {isAiGenerated && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-mono">
+                                {aiModel || 'AI'}
+                            </span>
+                        )}
+                        {simulationStatus === 'running' && (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${urgency.bg} ${urgency.color}`}>
+                                {urgency.level}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {signalCount > 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                                {signalCount} signals analyzed
+                            </span>
+                        )}
+                        <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full">
+                            {confidence}% confidence
+                        </span>
+                    </div>
                 </div>
-                <CardDescription>Human-in-the-Loop Governance</CardDescription>
+                <CardDescription>
+                    {simulationStatus === 'idle'
+                        ? 'Run simulation to generate AI recommendations'
+                        : loading
+                            ? 'Generating AI recommendations...'
+                            : velocity >= 65
+                                ? '⚠️ Immediate action recommended'
+                                : velocity >= 30
+                                    ? 'Consider deploying response strategy'
+                                    : 'Monitoring situation - action optional'
+                    }
+                </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <div className="p-3 bg-muted/30 rounded-md border border-border/50">
-                    <p className="text-sm font-medium">{rec.action}</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                        <strong>Reasoning:</strong> {rec.reasoning}
-                    </p>
-                </div>
+                {/* Loading state */}
+                {loading && (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground">
+                        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                        <span className="text-sm">Analyzing signals with GPT-4o...</span>
+                    </div>
+                )}
 
+                {/* AI Reasoning */}
+                {!loading && aiReasoning && status === 'pending' && (
+                    <div className="p-3 bg-cyan-500/10 rounded-md border border-cyan-500/30">
+                        <p className="text-xs font-semibold text-cyan-400 mb-1 flex items-center gap-1">
+                            <Brain className="h-3 w-3" /> AI Analysis
+                        </p>
+                        <p className="text-xs text-muted-foreground">{aiReasoning}</p>
+                    </div>
+                )}
+
+                {isLowConfidence && status === 'pending' && (
+                    <div className={`p-3 rounded-md border ${isVeryLowConfidence ? 'border-destructive/50 bg-destructive/10' : 'border-amber-500/40 bg-amber-500/10'}`}>
+                        <p className="text-xs font-semibold text-amber-400 mb-1">Human review required</p>
+                        <p className="text-xs text-muted-foreground">
+                            Model confidence {confidence}% is below the {lowConfidenceThreshold}% threshold. Escalate for review before action.
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                            <Button size="sm" variant="outline" onClick={handleEscalate} disabled={hasEscalated || escalationStatus === 'loading'}>
+                                {escalationStatus === 'loading' ? 'Escalating...' : hasEscalated ? 'Escalated' : 'Escalate for Review'}
+                            </Button>
+                            {escalationStatus === 'failed' && (
+                                <span className="text-xs text-destructive">Failed to log escalation.</span>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Strategy Selection */}
+                {status === 'pending' && aiStrategies.length > 0 && !loading && (
+                    <div className="space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground">Select Response Strategy:</p>
+                        <div className="space-y-2">
+                            {aiStrategies.map((strategy, idx) => {
+                                const IconComp = getIconComponent(strategy.icon);
+                                return (
+                                    <div
+                                        key={idx}
+                                        onClick={() => setSelectedStrategyIdx(idx)}
+                                        className={`p-3 rounded-md border cursor-pointer transition-all ${selectedStrategyIdx === idx
+                                            ? 'border-purple-500 bg-purple-500/10'
+                                            : 'border-border/50 bg-muted/20 hover:bg-muted/40'
+                                            }`}
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <IconComp className="h-4 w-4 text-purple-400" />
+                                                <p className="text-sm font-medium">{strategy.title}</p>
+                                            </div>
+                                            <span className="text-xs px-2 py-0.5 rounded-full shrink-0 bg-purple-500/20 text-purple-400">
+                                                {strategy.effectiveness}% effective
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1 ml-6">{strategy.description}</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* Waiting for simulation */}
+                {simulationStatus === 'idle' && !loading && aiStrategies.length === 0 && (
+                    <div className="py-6 text-center text-muted-foreground">
+                        <Brain className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">Run simulation to generate AI recommendations</p>
+                    </div>
+                )}
+
+                {/* Approved state */}
                 {status === 'approved' && (
-                    <div className="p-3 bg-green-500/10 rounded border border-green-500/30 text-sm text-green-400 flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4" /> Strategy approved. Mitigation active.
+                    <div className="space-y-3">
+                        <div className="p-3 rounded border text-sm flex items-center gap-2 bg-green-500/10 border-green-500/30 text-green-400">
+                            <CheckCircle className="h-4 w-4" />
+                            Strategy deployed{interventionHour !== null ? ` at hour ${interventionHour}` : ''}. Effect building gradually.
+                        </div>
+                        <div className="p-2 bg-muted/30 rounded text-xs">
+                            <p className="font-medium text-foreground">Active Strategy:</p>
+                            <p className="text-muted-foreground">{selectedStrategy.title}</p>
+                            <p className="text-purple-400 mt-1">
+                                {interventionMessage || `Target: ${selectedStrategy.effectiveness}% velocity reduction (gradual effect)`}
+                            </p>
+                            {interventionHour !== null && interventionHour <= 8 && (
+                                <p className="text-green-400 mt-1 text-xs">✓ Early intervention bonus active</p>
+                            )}
+                        </div>
                     </div>
                 )}
-                {status === 'rejected' && (
-                    <div className="p-3 bg-destructive/10 rounded border border-destructive/30 text-sm text-destructive">
-                        Strategy rejected. Awaiting alternative approach.
-                    </div>
-                )}
+
             </CardContent>
-            {status === 'pending' && (
-                <CardFooter className="flex gap-2 justify-end border-t border-border/30 pt-4">
-                    <Button
-                        variant="outline"
-                        onClick={() => setStatus('rejected')}
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    >
-                        Reject
-                    </Button>
+            {status === 'pending' && aiStrategies.length > 0 && !loading && (
+                <CardFooter className="flex justify-end border-t border-border/30 pt-4">
                     <Button onClick={handleApprove}>
-                        <CheckCircle className="mr-2 h-4 w-4" /> Approve Strategy
+                        <CheckCircle className="mr-2 h-4 w-4" /> Deploy Strategy
                     </Button>
                 </CardFooter>
             )}
@@ -309,28 +793,73 @@ import { api } from '../services/api';
 import { SignalFeed } from '../components/dashboard/SignalFeed';
 import { DebateViewer } from '../components/dashboard/DebateViewer';
 import { ExplainabilityPanel } from '../components/dashboard/ExplainabilityPanel';
+import { ExecutiveBriefingPanel } from '../components/dashboard/ExecutiveBriefingPanel';
+import { GovernanceAuditPanel } from '../components/dashboard/GovernanceAuditPanel';
+
+// Wrapper to conditionally show DebateViewer based on velocity
+// Once triggered, it stays visible for the rest of the simulation
+function ConditionalDebateViewer() {
+    const { metrics, simulationStatus } = useSimulation();
+    const velocity = metrics?.velocity || 0;
+    const [debateTriggered, setDebateTriggered] = React.useState(false);
+
+    // Trigger debate when velocity crosses 50
+    React.useEffect(() => {
+        if (velocity >= 50 && !debateTriggered) {
+            setDebateTriggered(true);
+        }
+    }, [velocity, debateTriggered]);
+
+    // Reset trigger when simulation resets
+    React.useEffect(() => {
+        if (simulationStatus === 'idle') {
+            setDebateTriggered(false);
+        }
+    }, [simulationStatus]);
+
+    // Show debate viewer if triggered
+    if (!debateTriggered) {
+        return null;
+    }
+
+    return (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <DebateViewer />
+        </div>
+    );
+}
 
 // --- MAIN DASHBOARD ---
 export default function Dashboard() {
     return (
-        <SimulationProvider>
-            <div className="space-y-6 pb-8">
-                <SimulationHeader />
-                <KeyMetrics />
+        <div className="space-y-6 pb-8">
+            <SimulationHeader />
+            <KeyMetrics />
 
-                {/* Top Row: Main Chart & Signals */}
-                <div className="grid gap-6 lg:grid-cols-5">
-                    <div className="lg:col-span-3 space-y-6">
-                        <VelocityChart />
-                        <DebateViewer />
-                    </div>
-                    <div className="lg:col-span-2 space-y-6">
-                        <DecisionPanel />
-                        <SignalFeed />
-                        <ExplainabilityPanel />
-                    </div>
+            {/* Top Row: Chart + Live Signal Feed side-by-side */}
+            <div className="grid gap-6 lg:grid-cols-5">
+                <div className="lg:col-span-3">
+                    <VelocityChart />
+                </div>
+                <div className="lg:col-span-2 h-[450px]">
+                    <SignalFeed />
                 </div>
             </div>
-        </SimulationProvider>
+
+            {/* Second Row: Decision Panel + AI Reasoning */}
+            <div className="grid gap-6 lg:grid-cols-2">
+                <DecisionPanel />
+                <ExplainabilityPanel />
+            </div>
+
+            {/* Third Row: Executive Briefing + Governance */}
+            <div className="grid gap-6 lg:grid-cols-2">
+                <ExecutiveBriefingPanel />
+                <GovernanceAuditPanel />
+            </div>
+
+            {/* Debate Viewer - appears when velocity exceeds threshold */}
+            <ConditionalDebateViewer />
+        </div>
     );
 }
