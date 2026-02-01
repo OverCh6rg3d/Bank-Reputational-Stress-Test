@@ -1,118 +1,170 @@
 # Bank Reputational Stress-Test (BRST)
 
-> **A "War Room" Simulator for Banking Resilience.**
-> *An agentic system that detects signal, interprets risk, and forecasts impact—without compromising privacy.*
+> **A responsible “war room” simulator for banking reputation risk.**
+> Built for the Mashreq AI Hackathon challenge using synthetic signals, explainable reasoning, and human‑in‑the‑loop governance.
 
 ---
 
 ## Executive Summary
-**BRST** is an AI-driven decision support system designed to interpret systemic risk rather than monitor individual behavior. Instead of reacting to real-time noise, BRST uses **Agent-Based Modeling** and **Causal Inference** to predict *why* a social signal matters and *how* it might impact bank operations (e.g., liquidity, call center volume, brand trust).
+**BRST** is an AI‑assisted decision support system for interpreting **public social signals** without monitoring individuals or using real social data. It simulates how reputational signals might spread, quantifies risk with confidence/uncertainty, and enforces governance guardrails with human approval checkpoints.
 
-**Key Differentiation:**
-* **No Real Scraping:** Operates entirely on synthetic data and aggregated social archetypes.
-* **Operational Focus:** Maps sentiment directly to operational resilience metrics.
-* **Governance First:** Built with hard-coded "non-action" boundaries and epistemic uncertainty checks.
+**What makes it different**
+- **No real social scraping**: all signals are synthetic and aggregated.
+- **Explainability-first**: every signal and decision is traceable.
+- **Governance embedded**: non‑action boundaries, escalation thresholds, and audit trails are built in.
 
 ---
 
-## Key Features
+## Product Capabilities (Aligned to Challenge Requirements)
+- **Signal detection & aggregation**: synthetic social stream and clustering insights.
+- **Risk & impact interpretation**: velocity, sentiment, alert thresholds, and scenario impact.
+- **Explainable insights**: reasoning traces and debate‑based verification.
+- **Confidence & uncertainty handling**: explicit confidence, escalation rules, and audit logging.
+- **Human escalation & review workflows**: approval required before any strategy deployment.
 
-### 1. The Causal Attribution Engine
-Distinguishes between harmless noise and systemic threats using multi-agent reasoning.
-* **Input:** Abstracted Social Signals (e.g., "Login Failure" rumor).
-* **Process:** Evaluates signal against historical fraud patterns vs. technical outage logs.
-* **Output:** Root Cause Probability Distribution (e.g., *80% Tech Issue, 20% Coordinated Attack*).
+---
 
-### 2. "Contagion Velocity" Simulator
-A Monte Carlo simulation engine that forecasts the spread of misinformation across customer demographics.
-* **Metric:** Calculates **Time-to-Criticality** (time until a signal reaches Tier-1 media).
-* **Scenario Testing:** Allows leadership to simulate "What-If" responses (e.g., Silence vs. Transparency) to see which flattens the risk curve.
-
-### 3. The Constitutional Guardrail Layer
-* **Socratic Review:** The AI must answer 3 verification questions about its confidence level before a briefing is generated.
-* **Zero-Action Protocol:** The system allows **zero** automated posting or public interaction.
-* **Audit Trace:** Every inference step is logged for regulatory compliance.
+## Dashboard Overview
+Key panels in the UI:
+- **Risk Trajectory**: 24‑hour simulation chart with velocity trends.
+- **Live Signal Feed**: synthetic signal stream with sentiment and virality.
+- **AI Recommendation**: strategy options with human approval and escalation.
+- **Explainability**: reasoning trace + on‑demand cluster detection.
+- **Executive Briefing**: C‑suite summary with risks, confidence, and impact.
+- **Governance & Audit**: guardrails, thresholds, escalation paths, audit trail.
+- **Adversarial Debate**: challenge AI findings to reduce hallucinations.
 
 ---
 
 ## System Architecture
 
 ```mermaid
-graph TD
-    A[Synthetic Signal Generator] -->|Raw Signals| B(Causal Interpretation Agent)
-    B -->|Risk Context| C{Governance Check}
-    C -->|Violates Guardrails| D[Reject & Log]
-    C -->|Approved| E[Contagion Simulator]
-    E -->|Impact Forecast| F[Executive Insight Briefing]
-    F -->|Human Review| G((Human Decision))
-    
-    style C fill:#f9f,stroke:#333,stroke-width:2px
-    style G fill:#bbf,stroke:#333,stroke-width:2px
+flowchart TD
+    A[Synthetic Signal Stream] --> B[Signal Detection & Clustering]
+    B --> C[Risk Interpretation Engine]
+    C --> D[Governance & Guardrails]
+    D -->|Human Review Required| E[AI Recommendations]
+    E --> F[Intervention Simulation]
+    F --> G[Executive Briefing]
+    D --> H[Audit Trail]
 
+    style D fill:#f9f,stroke:#333,stroke-width:1px
+    style H fill:#e5f2ff,stroke:#333,stroke-width:1px
 ```
 
-## Tech Stack
+### Request/Response Flow
+```mermaid
+sequenceDiagram
+    participant UI as Web Dashboard
+    participant API as FastAPI Server
+    participant SIM as Simulation Engine
+    participant GOV as Governance Gate
 
-* **Core Logic:** Python 3.12+
-* **Agent Orchestration:** Google Antigravity (Agentic Workflow)
-* **Interface:** Streamlit
-* **Data Strategy:** Synthetic JSON Signals & Archetypal Personas
+    UI->>API: Start simulation / get scenarios
+    API->>SIM: Run contagion simulation
+    SIM-->>API: Velocity + metrics
+    API-->>UI: Live updates (WS + REST)
+    UI->>API: Generate briefing / recommendations
+    API->>GOV: Guardrails + audit log
+    GOV-->>API: Guardrails + audit entries
+    API-->>UI: Briefing + audit
+```
+
+---
+
+## Tech Stack
+- **Frontend**: Vite + React + Tailwind + Recharts
+- **Backend**: FastAPI (REST + WebSocket)
+- **AI**: OpenAI API (configurable)
+- **Data**: Synthetic CSV/JSON datasets
 
 ---
 
 ## Repository Structure
 
 ```bash
-├── data/
-│   ├── synthetic_signals.json    # The "Trigger" signals (No real PII)
-│   ├── social_archetypes.csv     # Abstracted demographic behaviors
-├── src/
-│   ├── agents/                   # Interpretation & Governance Agents
-│   ├── simulator/                # Monte Carlo / Contagion Logic
-│   └── ui/                       # Dashboard Interface
-├── governance/
-│   ├── ETHICS.md                 # Responsible AI Manifesto
-│   └── guardrails.yaml           # Hard-coded constraints
-├── tests/                        # Unit tests for logic verification
-├── requirements.txt
-└── README.md
-
+data/
+    scenario_definitions.json
+    social_signals_stream.csv
+    agent_archetypes.csv
+    bank_knowledge_base.csv
+governance/
+    ETHICS.md
+    guardrails.yaml
+src/
+    backend/                 # FastAPI backend (core engine + governance)
+    api/                     # API server used by the dashboard
+    simulator/               # Contagion model
+    reporting/               # Executive briefing generator
+    ui/web-app/              # React dashboard
+tests/
+requirements.txt
+README.md
 ```
+
+---
 
 ## Responsible AI & Governance
-
-We adhere to a strict **"Human-in-the-Loop" (HITL)** philosophy.
-
-1. **Privacy First:** No PII (Personally Identifiable Information) is processed. All data is synthetic or aggregated.
-2. **Uncertainty Quantification:** All predictions include an "Epistemic Uncertainty" score (0-100%) to prevent overconfidence.
-3. **Explainability:** Every risk score is accompanied by a natural language explanation of the "Drivers" behind it.
+- **No PII / no live social data**: synthetic signals only.
+- **Explicit uncertainty**: confidence thresholds trigger escalation.
+- **Non‑action boundaries**: prohibits automated public action.
+- **Human‑in‑the‑loop**: all strategies require human approval.
+- **Audit trail**: decisions and rationale are recorded with scenario context.
 
 ---
 
-## Getting Started
+## Setup & Run
 
-1. **Clone the Repo**
+### 1) Backend (API)
 ```bash
-git clone [https://github.com/OverCh6rg3d/Bank-Reputational-Stress-Test.git](https://github.com/OverCh6rg3d/Bank-Reputational-Stress-Test.git)
-
-```
-
-
-2. **Install Dependencies**
-```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 
+# Start API server
+uvicorn api.server:app --reload --port 8000
 ```
 
-
-3. **Run the Simulator**
+### 2) Frontend (Dashboard)
 ```bash
-streamlit run src/ui/dashboard.py
-
+cd src/ui/web-app
+npm install
+npm run dev
 ```
-
-
 
 ---
 
-*Submitted for the Mashreq AI Hackathon 2025.*
+## Environment Variables
+Create a `.env` at the repo root:
+
+```env
+OPENAI_API_KEY=your_key_here
+```
+
+Optional frontend override:
+
+```env
+VITE_API_BASE=http://localhost:8000
+VITE_WS_BASE=ws://localhost:8000
+```
+
+---
+
+## Demo Workflow
+1. Select a scenario (all are **24 hours**).
+2. Run simulation and observe velocity changes.
+3. Review AI recommendation and optionally escalate.
+4. Generate executive briefing.
+5. Review governance guardrails and audit trail.
+6. Reset to return to baseline.
+
+---
+
+## Notes
+- This project uses **synthetic data only**, per hackathon constraints.
+- The dashboard enforces **human‑approval** and **non‑action** boundaries.
+- All scenarios are standardized to **24 hours** for consistent demos.
+
+---
+
+*Submitted for the Mashreq AI Hackathon 2025/2026.*
