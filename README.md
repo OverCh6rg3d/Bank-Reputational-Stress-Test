@@ -1,7 +1,7 @@
 # Bank Reputational Stress-Test (BRST)
 
 > **A responsible “war room” simulator for banking reputation risk.**
-> Built for the Mashreq AI Hackathon challenge using synthetic signals, explainable reasoning, and human‑in‑the‑loop governance.
+> Built for The Bounty Challenge (Mashreq) using synthetic signals, explainable reasoning, and human‑in‑the‑loop governance.
 
 ---
 
@@ -167,4 +167,4 @@ VITE_WS_BASE=ws://localhost:8000
 
 ---
 
-*Submitted for the Mashreq AI Hackathon 2025/2026.*
+*Submitted for The Bounty Challenge (Mashreq) 2025/2026.*
