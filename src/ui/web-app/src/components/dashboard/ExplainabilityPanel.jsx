@@ -203,34 +203,6 @@ export function ExplainabilityPanel() {
                     </p>
                 </div>
 
-                <div className="mt-4 rounded-lg border border-border/50 p-3 bg-background/40">
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-muted-foreground">Signal Detection</p>
-                        <Button size="sm" variant="outline" onClick={runDetection} disabled={clusterLoading}>
-                            {clusterLoading ? 'Detecting...' : 'Run Detection'}
-                        </Button>
-                    </div>
-                    {clusterError && (
-                        <p className="text-xs text-destructive">{clusterError}</p>
-                    )}
-                    {!clusterError && clusters.length === 0 && !clusterLoading && (
-                        <p className="text-xs text-muted-foreground">No clusters loaded. Run detection to see clustered signals.</p>
-                    )}
-                    {clusters.length > 0 && (
-                        <ul className="text-xs text-muted-foreground space-y-2">
-                            {clusters.map((c) => (
-                                <li key={c.id} className="border border-border/40 rounded p-2">
-                                    <div className="flex justify-between">
-                                        <span className="font-medium text-foreground">{c.category} • {c.severity}</span>
-                                        <span>{Math.round((c.confidence || 0) * 100)}%</span>
-                                    </div>
-                                    <div className="text-[10px]">{c.summary}</div>
-                                    <div className="text-[10px] text-muted-foreground">Signals: {c.signal_count}</div>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
             </CardContent>
         </Card>
     );
